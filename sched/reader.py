@@ -1,7 +1,7 @@
 import os
 import csv
 import pandas as pd
-from .scheduler import Job
+from .scheduler import Job, WaitingJob
 
 class WorkloadReader(object):
 
@@ -10,14 +10,29 @@ class WorkloadReader(object):
         with open(filename) as f:
             reader = csv.DictReader(f, delimiter='\t')
             for row in reader:
-                start   = pd.Timedelta(row['start'])
                 runtime = pd.Timedelta(row['runtime'])
-                start_us   = start.seconds * 1000 * 1000 + start.microseconds
                 runtime_us = runtime.seconds * 1000 * 1000 + runtime.microseconds
-                self.joblist.append(Job(row['thread'],
-                                        start_us,
-                                        runtime_us,
-                                        float(row['weight'])))
+
+                event = None
+                if 'event' in row:
+                    event = row['event']
+
+                if row['start'][0].isdigit():
+                    start   = pd.Timedelta(row['start'])
+                    start_us   = start.seconds * 1000 * 1000 + start.microseconds
+
+                    self.joblist.append(Job(row['thread'],
+                                            start_us,
+                                            runtime_us,
+                                            float(row['weight']),
+                                            event))
+                else:
+                    self.joblist.append(WaitingJob(row['thread'],
+                                            row['start'],
+                                            runtime_us,
+                                            float(row['weight']),
+                                            event))
+
 
     def empty(self):
         return len(self.joblist) == 0
