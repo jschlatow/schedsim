@@ -1,0 +1,7 @@
+thread	start	runtime	weight
+A	0s	1s	2
+B	0s	1s	2
+C	1s	0.5s	2
+A	3s	1s	2
+B	3.5s	1s	2
+C	4s	0.5s	1
