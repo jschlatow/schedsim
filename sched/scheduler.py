@@ -36,9 +36,20 @@ class Scheduler(object):
         self.waiting_jobs = dict()
         self.response_times = dict()
         self.trace = list()
+        self.pending_queue = list()
+        self.current_job = None
+        self.TIME_SLICE = 10000
 
     def schedule_job(self, j):
-        print("Thread%s started at %d" % (j.thread, j.arrival))
+        threads = [job.thread for job in self.pending_queue]
+        if self.current_job is not None:
+            threads.append(self.current_job.thread)
+
+        if j.thread in threads:
+            print("Unable to schedule thread which still has a job in queue: %s" % j)
+        else:
+            print("Thread%s started at %d" % (j.thread, j.arrival))
+            self.pending_queue.append(j)
 
     def finish_job(self, j):
         print("Thread%s finished at %d" % (j.thread, j.finish_time))
@@ -77,10 +88,14 @@ class Scheduler(object):
         while self.next_job and self.next_job.arrival <= self.time:
             self.schedule_job(self.take_next_job())
 
-    def unschedule_job(self, j):
-        executed = min(self.time - self.last_time, j.execution_time - j.executed_time)
+    def update_job(self, j, executed):
         j.executed_time += executed
         self.trace_execution(j, executed)
+
+    def unschedule_job(self, j):
+        executed = min(self.time - self.last_time, j.execution_time - j.executed_time)
+        self.update_job(j, executed)
+
         if j.executed_time == j.execution_time:
             j.finish_time = self.last_time + executed
             self.finish_job(j)
@@ -109,25 +124,6 @@ class Scheduler(object):
         while self.schedule_any():
             pass
 
-class RoundRobin(Scheduler):
-
-    def __init__(self):
-        Scheduler.__init__(self)
-        self.pending_queue = list()
-        self.current_job = None
-        self.TIME_SLICE = 10000
-
-    def schedule_job(self, j):
-        threads = [job.thread for job in self.pending_queue]
-        if self.current_job is not None:
-            threads.append(self.current_job.thread)
-
-        if j.thread in threads:
-            print("Unable to schedule thread which still has a job in queue: %s" % j)
-        else:
-            Scheduler.schedule_job(self, j)
-            self.pending_queue.append(j)
-
     def schedule_any(self):
         self.take_ready_jobs()
 
@@ -138,7 +134,7 @@ class RoundRobin(Scheduler):
         print("[%07d] %s" % (self.time, self.current_job))
 
         if len(self.pending_queue):
-            self.current_job = self.pending_queue.pop(0)
+            self.current_job = self.choose_job()
             self.tick(self.TIME_SLICE)
         elif self.idle():
             self.do_idle()
@@ -147,3 +143,10 @@ class RoundRobin(Scheduler):
             return False
 
         return True
+
+
+class RoundRobin(Scheduler):
+
+    def choose_job(self):
+        return self.pending_queue.pop(0)
+
