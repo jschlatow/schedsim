@@ -22,6 +22,10 @@ class WorkloadReader(object):
                     restart = pd.Timedelta(row['restart'])
                     restart_us = restart.seconds * 1000 * 1000 + restart.microseconds
 
+                prio = 0
+                if 'priority' in row and row['priority']:
+                    prio = int(row['priority'])
+
                 if row['start'][0].isdigit():
                     start   = pd.Timedelta(row['start'])
                     start_us   = start.seconds * 1000 * 1000 + start.microseconds
@@ -31,6 +35,7 @@ class WorkloadReader(object):
                                             runtime_us,
                                             restart_us,
                                             float(row['weight']),
+                                            prio,
                                             event))
                 else:
                     self.joblist.append(WaitingJob(row['thread'],
@@ -38,6 +43,7 @@ class WorkloadReader(object):
                                             runtime_us,
                                             restart_us,
                                             float(row['weight']),
+                                            prio,
                                             event))
 
 

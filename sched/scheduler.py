@@ -2,7 +2,7 @@ import numpy as np
 
 class Job(object):
 
-    def __init__(self, thread, arrival, execution_time, restart, weight=1, event=None):
+    def __init__(self, thread, arrival, execution_time, restart, weight=1, prio=0, event=None):
         self.arrival        = int(arrival)
         self.execution_time = int(execution_time)
         self.restart_time   = int(restart)
@@ -10,13 +10,14 @@ class Job(object):
         self.executed_time  = 0
         self.weight         = weight
         self.finish_event   = event
+        self.priority       = prio
 
     def restart(self, current_time):
         if self.restart_time == 0:
             return None
         else:
             return Job(self.thread, current_time + self.restart_time, self.executed_time, self.restart_time, self.weight,
-                       self.finish_event)
+                       self.finish_event, self.priority)
 
     def __repr__(self):
         return "%d-Thread%s(%f) %d/%d" % (self.arrival, self.thread, self.weight, self.executed_time, self.execution_time)
@@ -24,16 +25,18 @@ class Job(object):
 
 class WaitingJob(object):
 
-    def __init__(self, thread, start_event, execution_time, restart, weight=1, event=None):
+    def __init__(self, thread, start_event, execution_time, restart, weight=1, prio=0, event=None):
         self.start_event    = start_event
         self.execution_time = int(execution_time)
         self.restart_time   = int(restart)
         self.thread         = thread
         self.weight         = weight
         self.finish_event   = event
+        self.priority       = prio
 
     def start(self, time):
-        return Job(self.thread, time, self.execution_time, self.restart_time, self.weight, self.finish_event)
+        return Job(self.thread, time, self.execution_time, self.restart_time, self.weight, self.finish_event,
+                   self.priority)
 
 
 class Scheduler(object):
