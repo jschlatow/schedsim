@@ -30,15 +30,24 @@ class FairnessPlot(object):
                                      'Real time' : time,
                                      'weight'    : weight}).sort_values(['Thread', 'Real time'])
 
+        # calculate virtual time slices (even - odd entries divided by thread weight)
         diff = self.df['Real time'].diff()
         diff[::2] = 0
         self.df['Virtual time'] = diff / self.df['weight']
+
+        # sum-up virtual time slices
         self.df['Virtual time'] = self.df.groupby('Thread')['Virtual time'].cumsum()
 
-        # calculate gradient and sliding window
-        gradient = self.df['Virtual time'].diff()
-        gradient[::2] = 0
-        self.df['Service rate'] = gradient.rolling(2).sum() / 2
+        # calculate pointwise gradients on virtual time and real time
+        vdiff = self.df['Virtual time'].diff()
+        vdiff[::2] = 0
+        tdiff = self.df['Real time'].diff().fillna(0)
+
+        # calculate virtual time / real time gradients over a sliding window of 4
+        #  The resulting value does not matter, yet all threads receiving service
+        #  in the same time interval should have the same service rate. Otherwise,
+        #  the schedule is not fair.
+        self.df['Service rate'] = vdiff.rolling(4, step=2).sum() / tdiff.rolling(4, step=2).sum()
 
     def show(self):
         fig, axs = plt.subplots(nrows=2)
