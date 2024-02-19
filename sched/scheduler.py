@@ -17,7 +17,7 @@ class Job(object):
             return None
         else:
             return Job(self.thread, current_time + self.restart_time, self.executed_time, self.restart_time, self.weight,
-                       self.finish_event, self.priority)
+                       self.priority, self.finish_event)
 
     def __repr__(self):
         return "%d-Thread%s(%f) %d/%d" % (self.arrival, self.thread, self.weight, self.executed_time, self.execution_time)
@@ -138,6 +138,19 @@ class Scheduler(object):
         self.time      = self.next_job.arrival
         self.last_time = self.time
 
+    def next_preemption(self):
+        candidates = list()
+        if self.next_job:
+            candidates.append(self.next_job.arrival)
+
+        if len(self.restartable_jobs):
+            candidates.append(self.restartable_jobs[0].arrival)
+
+        if len(candidates) == 0:
+            return float('inf')
+
+        return min(candidates)
+
     def execute(self, reader):
         self.reader = reader
         self.take_next_job()
@@ -148,18 +161,24 @@ class Scheduler(object):
         while self.schedule_any():
             pass
 
+    def time_slice(self, j):
+        return self.TIME_SLICE
+
+    def reinsert_job(self, j):
+        self.pending_queue.append(j)
+
     def schedule_any(self):
         self.take_ready_jobs()
 
         if self.current_job != None:
             if not self.unschedule_job(self.current_job):
-                self.pending_queue.append(self.current_job)
+                self.reinsert_job(self.current_job)
 
         print("[%07d] %s" % (self.time, self.current_job))
 
         if len(self.pending_queue):
             self.current_job = self.choose_job()
-            self.tick(self.TIME_SLICE)
+            self.tick(self.time_slice(self.current_job))
         elif self.idle():
             self.do_idle()
         else:
@@ -195,3 +214,75 @@ class Stride(Scheduler):
     def choose_job(self):
         dummy, job_index = self.min_vt()
         return self.pending_queue.pop(job_index)
+
+
+# Current quota-based scheduler implemented in base-hw
+#  - we interpret the weight as quota in %
+#  - priority 0 is interpreted as non-quoted
+class BaseHw(Scheduler):
+
+    def __init__(self):
+        Scheduler.__init__(self)
+        self.SUPERPERIOD = 1000 * 1000 # 1s
+        self.last_superperiod = 0
+
+        # we must store the CPU quantum per thread
+        self.quota = dict()
+
+    def start_round(self):
+        self.last_superperiod = self.time
+
+        # recalculate quota
+        self.quota = dict()
+        for j in self.pending_queue:
+            if j.priority > 0:
+                self.quota[j.thread] = self.SUPERPERIOD / 100 * j.weight
+            else:
+                self.quota[j.thread] = 0
+
+    def update_job(self, j, executed):
+        Scheduler.update_job(self, j, executed)
+        if self.quota[j.thread] > 0:
+            if executed > self.quota[j.thread]:
+                raise Exception("Quota overuse for %s" % j)
+
+            self.quota[j.thread] -= executed
+            if self.quota[j.thread] == 0:
+                print("")
+                print("Thread%s depleted its quota at %s" % (j.thread, self.time))
+                j.one_time_boost = True
+
+    def schedule_job(self, j):
+        if j.thread not in self.quota:
+            if j.priority > 0:
+                self.quota[j.thread] = self.SUPERPERIOD / 100 * j.weight
+            else:
+                self.quota[j.thread] = 0
+
+        Scheduler.schedule_job(self, j)
+
+    def choose_job(self):
+        if self.time >= self.last_superperiod + self.SUPERPERIOD:
+            self.start_round()
+
+        # build list of pending jobs' priorities lowering jobs with depleted
+        #  quota to default priority
+        job_prios = [j.priority if self.quota[j.thread] > 0 else 0 for j in self.pending_queue]
+
+        # find and return first highest priority job
+        index = np.argmax(job_prios)
+        return self.pending_queue.pop(index)
+
+    def reinsert_job(self, j):
+        if hasattr(j, 'one_time_boost') and j.one_time_boost:
+            j.one_time_boost = False
+            self.pending_queue.insert(0,j)
+        else:
+            self.pending_queue.append(j)
+
+    def time_slice(self, j):
+        time_left_in_superperiod = self.last_superperiod + self.SUPERPERIOD - self.time
+        if self.quota[j.thread] > 0:
+            return min(self.TIME_SLICE, self.next_preemption(), self.quota[j.thread], time_left_in_superperiod)
+        else:
+            return min(self.TIME_SLICE, self.next_preemption(), time_left_in_superperiod)

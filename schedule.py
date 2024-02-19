@@ -8,7 +8,7 @@ from plot  import plot
 
 parser = argparse.ArgumentParser(description="Simulate CPU scheduler")
 parser.add_argument("filename", type=str)
-parser.add_argument("--policy", choices=["rr", "stride"], default="rr")
+parser.add_argument("--policy", choices=["rr", "stride", "base-hw"], default="rr")
 parser.add_argument("--plot_latencies", action="store_true")
 
 args = parser.parse_args()
@@ -19,6 +19,8 @@ if args.policy == "rr":
     s = scheduler.RoundRobin()
 elif args.policy == "stride":
     s = scheduler.Stride()
+elif args.policy == "base-hw":
+    s = scheduler.BaseHw()
 
 s.execute(trace)
 
