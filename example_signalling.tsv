@@ -4,4 +4,4 @@ C	e2	0.5s	1
 A	0s	0.5s	2	e1
 B	0s	1s	2	
 A	3s	1s	2	e2
-B	3.5s	1s	2	
+B	3.5s	1.5s	2	
