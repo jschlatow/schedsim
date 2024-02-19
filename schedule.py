@@ -8,12 +8,17 @@ from plot  import plot
 
 parser = argparse.ArgumentParser(description="Simulate CPU scheduler")
 parser.add_argument("filename",    type=str)
+parser.add_argument("--policy", choices=["rr", "stride"], default="rr")
 
 args = parser.parse_args()
 
 trace = reader.WorkloadReader(args.filename)
 
-s = scheduler.RoundRobin()
+if args.policy == "rr":
+    s = scheduler.RoundRobin()
+elif args.policy == "stride":
+    s = scheduler.Stride()
+
 s.execute(trace)
 
 # plot response time distribution

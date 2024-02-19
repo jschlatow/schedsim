@@ -1,3 +1,4 @@
+import numpy as np
 
 class Job(object):
 
@@ -150,3 +151,24 @@ class RoundRobin(Scheduler):
     def choose_job(self):
         return self.pending_queue.pop(0)
 
+
+class Stride(Scheduler):
+
+    def min_vt(self):
+        vtimes = [j.virtual_time for j in self.pending_queue]
+        if len(vtimes) == 0:
+            return [0, 0]
+
+        return [np.min(vtimes), np.argmin(vtimes)]
+
+    def update_job(self, j, executed):
+        Scheduler.update_job(self, j, executed)
+        j.virtual_time += executed / j.weight
+
+    def schedule_job(self, j):
+        j.virtual_time, dummy = self.min_vt()
+        Scheduler.schedule_job(self, j)
+
+    def choose_job(self):
+        dummy, job_index = self.min_vt()
+        return self.pending_queue.pop(job_index)
