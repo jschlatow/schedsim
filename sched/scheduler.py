@@ -2,13 +2,21 @@ import numpy as np
 
 class Job(object):
 
-    def __init__(self, thread, arrival, execution_time, weight=1, event=None):
+    def __init__(self, thread, arrival, execution_time, restart, weight=1, event=None):
         self.arrival        = int(arrival)
         self.execution_time = int(execution_time)
+        self.restart_time   = int(restart)
         self.thread         = thread
         self.executed_time  = 0
         self.weight         = weight
         self.finish_event   = event
+
+    def restart(self, current_time):
+        if self.restart_time == 0:
+            return None
+        else:
+            return Job(self.thread, current_time + self.restart_time, self.executed_time, self.restart_time, self.weight,
+                       self.finish_event)
 
     def __repr__(self):
         return "%d-Thread%s(%f) %d/%d" % (self.arrival, self.thread, self.weight, self.executed_time, self.execution_time)
@@ -16,15 +24,16 @@ class Job(object):
 
 class WaitingJob(object):
 
-    def __init__(self, thread, start_event, execution_time, weight=1, event=None):
+    def __init__(self, thread, start_event, execution_time, restart, weight=1, event=None):
         self.start_event    = start_event
         self.execution_time = int(execution_time)
+        self.restart_time   = int(restart)
         self.thread         = thread
         self.weight         = weight
         self.finish_event   = event
 
     def start(self, time):
-        return Job(self.thread, time, self.execution_time, self.weight, self.finish_event)
+        return Job(self.thread, time, self.execution_time, self.restart_time, self.weight, self.finish_event)
 
 
 class Scheduler(object):
@@ -35,6 +44,7 @@ class Scheduler(object):
         self.reader   = None
         self.next_job = None
         self.waiting_jobs = dict()
+        self.restartable_jobs = list()
         self.response_times = dict()
         self.trace = list()
         self.pending_queue = list()
@@ -59,9 +69,16 @@ class Scheduler(object):
             self.response_times[j.thread] = list()
         self.response_times[j.thread].append(j.finish_time - j.arrival)
 
+        # schedule waiting jobs that are triggered by finish event
         if j.finish_event in self.waiting_jobs:
             for wj in self.waiting_jobs.pop(j.finish_event):
                 self.schedule_job(wj.start(j.finish_time))
+
+        # store new job if it restarts itself
+        restart_job = j.restart(j.finish_time)
+        if restart_job is not None:
+            self.restartable_jobs.append(restart_job)
+            self.restartable_jobs.sort(key=lambda x: x.arrival)
 
     def trace_execution(self, j, executed):
         self.trace.append([j.thread, self.last_time,            j.weight])
@@ -86,6 +103,9 @@ class Scheduler(object):
         return job
 
     def take_ready_jobs(self):
+        while self.restartable_jobs and self.restartable_jobs[0].arrival <= self.time:
+            self.schedule_job(self.restartable_jobs.pop(0))
+
         while self.next_job and self.next_job.arrival <= self.time:
             self.schedule_job(self.take_next_job())
 

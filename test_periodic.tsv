@@ -1,0 +1,4 @@
+thread	start	runtime	weight	restart
+A	0s	1s	2
+C	0s	10ms	2	 5ms
+B	0.5s	0.5s	1
