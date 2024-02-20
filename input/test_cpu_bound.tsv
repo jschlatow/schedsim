@@ -1,5 +1,5 @@
-thread	start	runtime	weight
-A	0s	1s	2
-B	0s	1s	2
-C	1s	0.5s	2
-D	1.5s	0.5s	1
+thread	start	runtime	weight	priority
+A	0s	1s	20	2
+B	0s	1s	20	2
+C	1s	0.5s	20	1
+D	1.5s	0.5s	10	0
