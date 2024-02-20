@@ -304,7 +304,7 @@ class Scheduler(object):
     def do_idle(self):
         """Advances time to the arrival of the next job"""
         self.current_job = None
-        self.time      = self.next_job.arrival
+        self.time      = self.next_preemption()
         self.last_time = self.time
 
     def next_preemption(self):

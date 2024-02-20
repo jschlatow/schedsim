@@ -1,0 +1,5 @@
+thread	start	runtime	weight	priority	restart
+A	0s	20ms	10	1	50ms
+B	0s	20ms	20	1	25ms
+I	every 50ms	10ms	15	0
+C	0.8s	0.5s	5	0
