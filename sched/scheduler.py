@@ -335,6 +335,22 @@ class RoundRobin(Scheduler):
 class Stride(Scheduler):
     """Stride scheduler"""
 
+    def __init__(self):
+        Scheduler.__init__(self)
+
+        # we need to store the last virtual time of each thread
+        self.last_vtime = dict()
+
+    def thread_vt(self, t, increment=0):
+        """Returns the (incremented) virtual time of a thread."""
+        if t not in self.last_vtime:
+            self.last_vtime[t], dummy = self.min_vt()
+
+        if increment > 0:
+            self.last_vtime[t] += increment
+
+        return self.last_vtime[t]
+
     def min_vt(self):
         """
         Finds the minimum virtual time of all pending jobs
@@ -343,7 +359,10 @@ class Stride(Scheduler):
         -------
         [minimum virtual time, index of job with minimum virtual time]
         """
-        vtimes = [j.virtual_time for j in self.pending_queue]
+        vtimes = [self.thread_vt(j.thread) for j in self.pending_queue]
+        if self.current_job is not None:
+            vtimes.append(self.thread_vt(self.current_job.thread))
+
         if len(vtimes) == 0:
             return [0, 0]
 
@@ -353,11 +372,16 @@ class Stride(Scheduler):
         Scheduler.update_job(self, j, executed)
 
         # update virtual time
-        j.virtual_time += executed / j.weight
+        self.thread_vt(j.thread, executed / j.weight)
 
     def start_job(self, j):
-        # set virtual time
-        j.virtual_time, dummy = self.min_vt()
+        # initialise the thread's virtual time
+        vt = self.thread_vt(j.thread)
+
+        # a thread with lower virtual time than min_vt must be adapted to  min_vt
+        min_vt, dummy = self.min_vt()
+        if min_vt > vt:
+            self.thread_vt(j.thread, min_vt - vt)
 
         Scheduler.start_job(self, j)
 
