@@ -26,25 +26,24 @@ class WorkloadReader(object):
                 if 'priority' in row and row['priority']:
                     prio = int(row['priority'])
 
-                if row['start'][0].isdigit():
-                    start   = pd.Timedelta(row['start'])
-                    start_us   = start.seconds * 1000 * 1000 + start.microseconds
+                period = 0
+                start = row['start']
+                if start.startswith("every"):
+                    period_td = pd.Timedelta(start.split()[1])
+                    period    = period_td.seconds * 1000 * 1000 + period_td.microseconds
+                    start     = 0
+                elif start[0].isdigit():
+                    start_td = pd.Timedelta(row['start'])
+                    start    = start_td.seconds * 1000 * 1000 + start_td.microseconds
 
-                    self.joblist.append(Job(row['thread'],
-                                            start_us,
-                                            runtime_us,
-                                            restart_us,
-                                            float(row['weight']),
-                                            prio,
-                                            event))
-                else:
-                    self.joblist.append(WaitingJob(row['thread'],
-                                            row['start'],
-                                            runtime_us,
-                                            restart_us,
-                                            float(row['weight']),
-                                            prio,
-                                            event))
+                self.joblist.append(Job(row['thread'],
+                                        start,
+                                        runtime_us,
+                                        period=period,
+                                        restart=restart_us,
+                                        weight=float(row['weight']),
+                                        prio=prio,
+                                        event=event))
 
 
     def empty(self):

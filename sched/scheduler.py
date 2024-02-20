@@ -6,11 +6,11 @@ class Job(object):
 
     After a job arrival time has passed it is always schedulable. A job has a
     weight and a priority. After a job has executed for its specified execution
-    time, it may release a finish event (to trigger other jobs) or restart
-    itself after a certain time interval.
+    time, it may release a finish event (to trigger other jobs), or restart
+    itself periodically or after a certain time interval.
     """
 
-    def __init__(self, thread, arrival, execution_time, restart=0, weight=1, prio=0, event=None):
+    def __init__(self, thread, arrival, execution_time, period=0, restart=0, weight=1, prio=0, event=None):
         """
         Constructs a job.
 
@@ -22,6 +22,9 @@ class Job(object):
                 arrival time in microseconds
             execution_time : int
                 execution time in microseconds
+            period : int, optional
+                period (in microseconds) after which the job is triggered again
+                (default: 0)
             restart : int, optional
                 time interval (in microseconds) after which the job is restarted
                 if this is 0, the job does not restart itself after completion
@@ -36,6 +39,7 @@ class Job(object):
         self.arrival        = int(arrival)
         self.execution_time = int(execution_time)
         self.restart_time   = int(restart)
+        self.period         = int(period)
         self.thread         = thread
         self.executed_time  = 0
         self.weight         = int(weight)
@@ -45,7 +49,9 @@ class Job(object):
     def restart(self, completion_time):
         """
         Creates a new Job if this Job is restarted after completion. The new
-        Job's arrival time is set to completion time + restart time.
+        Job's arrival time is set to arrival time + period or
+        completion time + restart time depending on whether a period or restart
+        time is set.
 
         Parameters
         ----------
@@ -56,12 +62,36 @@ class Job(object):
         -------
             None or Job object
         """
-        if self.restart_time == 0:
-            return None
-        else:
-            return Job(self.thread, completion_time + self.restart_time,
-                       self.executed_time, self.restart_time, self.weight,
-                       self.priority, self.finish_event)
+        job = None
+        if self.period > 0:
+            new_arrival = self.arrival + self.period
+            extra_time  = 0
+            while new_arrival < completion_time:
+                new_arrival += self.period
+                extra_time  += self.execution_time
+
+            job = Job(self.thread, new_arrival,
+                      self.execution_time,
+                      period=self.period,
+                      restart=self.restart_time,
+                      weight=self.weight,
+                      prio=self.priority,
+                      event=self.finish_event)
+
+            # if we missed any activation, we increase the computation need
+            if extra_time:
+                job.executed_time = -extra_time
+
+        elif self.restart_time > 0:
+            job = Job(self.thread, completion_time + self.restart_time,
+                      self.execution_time,
+                      period=self.period,
+                      restart=self.restart_time,
+                      weight=self.weight,
+                      prio=self.priority,
+                      event=self.finish_event)
+
+        return job
 
     def __repr__(self):
         return "%d-Thread%s(%f) %d/%d" % (self.arrival, self.thread, self.weight, self.executed_time, self.execution_time)
@@ -70,7 +100,7 @@ class Job(object):
 class WaitingJob(object):
     """ A waiting job is activated by another job's completion event."""
 
-    def __init__(self, thread, start_event, execution_time, restart=0, weight=1, prio=0, event=None):
+    def __init__(self, thread, start_event, execution_time, period=0, restart=0, weight=1, prio=0, event=None):
         """
         Constucts a WaitingJob.
 
@@ -82,6 +112,9 @@ class WaitingJob(object):
                 name of the start event
             execution_time : int
                 execution time in microseconds
+            period : int, optional
+                period (in microseconds) after which the job is triggered again
+                (default: 0)
             restart : int, optional
                 time interval (in microseconds) after which the job is restarted
                 if this is 0, the job does not restart itself after completion
@@ -96,6 +129,7 @@ class WaitingJob(object):
         self.start_event    = start_event
         self.execution_time = int(execution_time)
         self.restart_time   = int(restart)
+        self.period         = int(period)
         self.thread         = thread
         self.weight         = int(weight)
         self.finish_event   = event
@@ -103,8 +137,12 @@ class WaitingJob(object):
 
     def start(self, time):
         """Start this job at the given time and return the corresponding Job object."""
-        return Job(self.thread, time, self.execution_time, self.restart_time, self.weight, self.finish_event,
-                   self.priority)
+        return Job(self.thread, time, self.execution_time,
+                   period=self.period,
+                   restart=self.restart_time,
+                   weight=self.weight,
+                   event=self.finish_event,
+                   prio=self.priority)
 
 
 class Scheduler(object):
@@ -311,6 +349,10 @@ class Scheduler(object):
                 self.reinsert_job(self.current_job)
 
         print("[%07d] %s" % (self.time, self.current_job))
+
+        # check whether there is any restarted job ready
+        self.current_job = None
+        self.take_ready_jobs()
 
         if len(self.pending_queue):
             self.current_job = self.choose_job()
