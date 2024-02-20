@@ -1,22 +1,66 @@
 import numpy as np
 
 class Job(object):
+    """
+    A standard job.
 
-    def __init__(self, thread, arrival, execution_time, restart, weight=1, prio=0, event=None):
+    After a job arrival time has passed it is always schedulable. A job has a
+    weight and a priority. After a job has executed for its specified execution
+    time, it may release a finish event (to trigger other jobs) or restart
+    itself after a certain time interval.
+    """
+
+    def __init__(self, thread, arrival, execution_time, restart=0, weight=1, prio=0, event=None):
+        """
+        Constructs a job.
+
+        Parameters
+        ----------
+            thread : str
+                name of the thread
+            arrival : int
+                arrival time in microseconds
+            execution_time : int
+                execution time in microseconds
+            restart : int, optional
+                time interval (in microseconds) after which the job is restarted
+                if this is 0, the job does not restart itself after completion
+                (default: 0)
+            weight: int, optional
+                job weight (default: 1)
+            prio : int, optional
+                job priority, higher value means higher priority (default: 0)
+            event : str, optional
+                name of the finish event (default: None)
+        """
         self.arrival        = int(arrival)
         self.execution_time = int(execution_time)
         self.restart_time   = int(restart)
         self.thread         = thread
         self.executed_time  = 0
-        self.weight         = weight
+        self.weight         = int(weight)
         self.finish_event   = event
-        self.priority       = prio
+        self.priority       = int(prio)
 
-    def restart(self, current_time):
+    def restart(self, completion_time):
+        """
+        Creates a new Job if this Job is restarted after completion. The new
+        Job's arrival time is set to completion time + restart time.
+
+        Parameters
+        ----------
+            completion_time: int
+                completion time of this job
+
+        Returns
+        -------
+            None or Job object
+        """
         if self.restart_time == 0:
             return None
         else:
-            return Job(self.thread, current_time + self.restart_time, self.executed_time, self.restart_time, self.weight,
+            return Job(self.thread, completion_time + self.restart_time,
+                       self.executed_time, self.restart_time, self.weight,
                        self.priority, self.finish_event)
 
     def __repr__(self):
@@ -24,37 +68,94 @@ class Job(object):
 
 
 class WaitingJob(object):
+    """ A waiting job is activated by another job's completion event."""
 
-    def __init__(self, thread, start_event, execution_time, restart, weight=1, prio=0, event=None):
+    def __init__(self, thread, start_event, execution_time, restart=0, weight=1, prio=0, event=None):
+        """
+        Constucts a WaitingJob.
+
+        Parameters
+        ----------
+            thread : str
+                name of the thread
+            start_event : str
+                name of the start event
+            execution_time : int
+                execution time in microseconds
+            restart : int, optional
+                time interval (in microseconds) after which the job is restarted
+                if this is 0, the job does not restart itself after completion
+                (default: 0)
+            weight: int, optional
+                job weight (default: 1)
+            prio : int, optional
+                job priority, higher value means higher priority (default: 0)
+            event : str, optional
+                name of the finish event (default: None)
+        """
         self.start_event    = start_event
         self.execution_time = int(execution_time)
         self.restart_time   = int(restart)
         self.thread         = thread
-        self.weight         = weight
+        self.weight         = int(weight)
         self.finish_event   = event
-        self.priority       = prio
+        self.priority       = int(prio)
 
     def start(self, time):
+        """Start this job at the given time and return the corresponding Job object."""
         return Job(self.thread, time, self.execution_time, self.restart_time, self.weight, self.finish_event,
                    self.priority)
 
 
 class Scheduler(object):
+    """ Generic job scheduler """
 
     def __init__(self):
+        """ Constructs a Scheduler """
+        # current time
         self.time = 0
+
+        # last time a job has been scheduled
         self.last_time = 0
+
+        # reader object providing to-be-scheduled jobs
         self.reader   = None
+
+        # next job from the reader
         self.next_job = None
+
+        # dictionary of WaitingJob objects indexed by event name
         self.waiting_jobs = dict()
-        self.restartable_jobs = list()
+
+        # list of restarted jobs (waiting for their arrival time)
+        self.restarted_jobs = list()
+
+        # dictionary of resulting response times indexed by thread name
         self.response_times = dict()
+
+        # resulting execution trace
         self.trace = list()
+
+        # list/queue of schedulable jobs
         self.pending_queue = list()
+
+        # currently scheduled jobs
         self.current_job = None
+
+        # default time-slice length in microseoncs
         self.TIME_SLICE = 10000
 
-    def schedule_job(self, j):
+    def start_job(self, j):
+        """
+        Start a job by adding it to the pending queue.
+
+        Note: Ever thread must have at most one started job.
+
+        Parameters
+        ----------
+            j : Job
+                Job to be started
+        """
         threads = [job.thread for job in self.pending_queue]
         if self.current_job is not None:
             threads.append(self.current_job.thread)
@@ -66,6 +167,17 @@ class Scheduler(object):
             self.pending_queue.append(j)
 
     def finish_job(self, j):
+        """
+        Completes a job.
+
+        Completion may release waiting jobs. The completed job may also restart
+        itself after a certain time.
+
+        Parameters
+        ----------
+            j : Job
+                Job to be completed
+        """
         print("Thread%s finished at %d" % (j.thread, j.finish_time))
         # calculate and save response time
         if j.thread not in self.response_times:
@@ -75,22 +187,16 @@ class Scheduler(object):
         # schedule waiting jobs that are triggered by finish event
         if j.finish_event in self.waiting_jobs:
             for wj in self.waiting_jobs.pop(j.finish_event):
-                self.schedule_job(wj.start(j.finish_time))
+                self.start_job(wj.start(j.finish_time))
 
         # store new job if it restarts itself
         restart_job = j.restart(j.finish_time)
         if restart_job is not None:
-            self.restartable_jobs.append(restart_job)
-            self.restartable_jobs.sort(key=lambda x: x.arrival)
-
-    def trace_execution(self, j, executed):
-        self.trace.append([j.thread, self.last_time,            j.weight])
-        self.trace.append([j.thread, self.last_time + executed, j.weight])
-
-    def tick(self, delta):
-        self.time += delta
+            self.restarted_jobs.append(restart_job)
+            self.restarted_jobs.sort(key=lambda x: x.arrival)
 
     def take_next_job(self):
+        """Takes and returns the next Job from the reader"""
         job = self.next_job
 
         while True:
@@ -106,17 +212,40 @@ class Scheduler(object):
         return job
 
     def take_ready_jobs(self):
-        while self.restartable_jobs and self.restartable_jobs[0].arrival <= self.time:
-            self.schedule_job(self.restartable_jobs.pop(0))
+        """Releases all newly activated jobs"""
+        while self.restarted_jobs and self.restarted_jobs[0].arrival <= self.time:
+            self.start_job(self.restarted_jobs.pop(0))
 
         while self.next_job and self.next_job.arrival <= self.time:
-            self.schedule_job(self.take_next_job())
+            self.start_job(self.take_next_job())
 
     def update_job(self, j, executed):
-        j.executed_time += executed
-        self.trace_execution(j, executed)
+        """
+        Update a Job after it has been executed for a certain time.
 
-    def unschedule_job(self, j):
+        Parameters
+        ----------
+            j : Job
+                Job object
+            executed : int
+                time interval for which j has been executed
+        """
+        j.executed_time += executed
+        self.trace.append([j.thread, self.last_time,            j.weight])
+        self.trace.append([j.thread, self.last_time + executed, j.weight])
+
+    def try_finish_job(self, j):
+        """
+        Updates a job after it has been scheduled and checks whether it completed.
+
+        Paramters
+        ---------
+            j : Job
+
+        Returns
+        -------
+        True if j has been completed.
+        """
         executed = min(self.time - self.last_time, j.execution_time - j.executed_time)
         self.update_job(j, executed)
 
@@ -131,20 +260,23 @@ class Scheduler(object):
         return False
 
     def idle(self):
+        """Returns True if the next job arrives in the future"""
         return self.next_job and self.next_job.arrival > self.time
 
     def do_idle(self):
+        """Advances time to the arrival of the next job"""
         self.current_job = None
         self.time      = self.next_job.arrival
         self.last_time = self.time
 
     def next_preemption(self):
+        """Returns time of the next job arrival"""
         candidates = list()
         if self.next_job:
             candidates.append(self.next_job.arrival)
 
-        if len(self.restartable_jobs):
-            candidates.append(self.restartable_jobs[0].arrival)
+        if len(self.restarted_jobs):
+            candidates.append(self.restarted_jobs[0].arrival)
 
         if len(candidates) == 0:
             return float('inf')
@@ -152,33 +284,37 @@ class Scheduler(object):
         return min(candidates)
 
     def execute(self, reader):
+        """Executes the jobs provided by the reader"""
         self.reader = reader
         self.take_next_job()
 
         if self.next_job:
             self.time = self.next_job.arrival
 
-        while self.schedule_any():
+        while self.schedule():
             pass
 
     def time_slice(self, j):
+        """Returns length of the time slice for Job j"""
         return self.TIME_SLICE
 
     def reinsert_job(self, j):
+        """Inserts Job j into the pending queue"""
         self.pending_queue.append(j)
 
-    def schedule_any(self):
+    def schedule(self):
+        """Performs a scheduling decision"""
         self.take_ready_jobs()
 
         if self.current_job != None:
-            if not self.unschedule_job(self.current_job):
+            if not self.try_finish_job(self.current_job):
                 self.reinsert_job(self.current_job)
 
         print("[%07d] %s" % (self.time, self.current_job))
 
         if len(self.pending_queue):
             self.current_job = self.choose_job()
-            self.tick(self.time_slice(self.current_job))
+            self.time += self.time_slice(self.current_job)
         elif self.idle():
             self.do_idle()
         else:
@@ -189,14 +325,24 @@ class Scheduler(object):
 
 
 class RoundRobin(Scheduler):
+    """Round-Robin scheduler"""
 
     def choose_job(self):
+        """Returns the Job at the head of the queue"""
         return self.pending_queue.pop(0)
 
 
 class Stride(Scheduler):
+    """Stride scheduler"""
 
     def min_vt(self):
+        """
+        Finds the minimum virtual time of all pending jobs
+
+        Returns
+        -------
+        [minimum virtual time, index of job with minimum virtual time]
+        """
         vtimes = [j.virtual_time for j in self.pending_queue]
         if len(vtimes) == 0:
             return [0, 0]
@@ -205,21 +351,31 @@ class Stride(Scheduler):
 
     def update_job(self, j, executed):
         Scheduler.update_job(self, j, executed)
+
+        # update virtual time
         j.virtual_time += executed / j.weight
 
-    def schedule_job(self, j):
+    def start_job(self, j):
+        # set virtual time
         j.virtual_time, dummy = self.min_vt()
-        Scheduler.schedule_job(self, j)
+
+        Scheduler.start_job(self, j)
 
     def choose_job(self):
+        """Returns the job with the minimum virtual time"""
         dummy, job_index = self.min_vt()
         return self.pending_queue.pop(job_index)
 
 
-# Current quota-based scheduler implemented in base-hw
-#  - we interpret the weight as quota in %
-#  - priority 0 is interpreted as non-quoted
 class BaseHw(Scheduler):
+    """
+    Current quota-based scheduler implemented in base-hw
+
+    Remarks
+    -------
+    - We interpret the weight as quota in %.
+    - Jobs with priority 0 are handled as non-quoted jobs.
+    """
 
     def __init__(self):
         Scheduler.__init__(self)
@@ -252,14 +408,14 @@ class BaseHw(Scheduler):
                 print("Thread%s depleted its quota at %s" % (j.thread, self.time))
                 j.one_time_boost = True
 
-    def schedule_job(self, j):
+    def start_job(self, j):
         if j.thread not in self.quota:
             if j.priority > 0:
                 self.quota[j.thread] = self.SUPERPERIOD / 100 * j.weight
             else:
                 self.quota[j.thread] = 0
 
-        Scheduler.schedule_job(self, j)
+        Scheduler.start_job(self, j)
 
     def choose_job(self):
         if self.time >= self.last_superperiod + self.SUPERPERIOD:
@@ -274,6 +430,7 @@ class BaseHw(Scheduler):
         return self.pending_queue.pop(index)
 
     def reinsert_job(self, j):
+        # Jobs that depleted their quota will be added to the head of the queue.
         if hasattr(j, 'one_time_boost') and j.one_time_boost:
             j.one_time_boost = False
             self.pending_queue.insert(0,j)
