@@ -410,7 +410,7 @@ class Stride(Scheduler):
 
         return self.last_vtime[t]
 
-    def min_vt(self):
+    def min_vt(self, skip_jobs=set()):
         """
         Finds the minimum virtual time of all pending jobs
 
@@ -418,8 +418,8 @@ class Stride(Scheduler):
         -------
         [minimum virtual time, index of job with minimum virtual time]
         """
-        vtimes = [self.thread_vt(j.thread) for j in self.pending_queue]
-        if self.current_job is not None:
+        vtimes = [self.thread_vt(j.thread) if j not in skip_jobs else float('inf') for j in self.pending_queue]
+        if self.current_job is not None and self.current_job not in skip_jobs:
             vtimes.append(self.thread_vt(self.current_job.thread))
 
         if len(vtimes) == 0:
@@ -448,6 +448,54 @@ class Stride(Scheduler):
         """Returns the job with the minimum virtual time"""
         dummy, job_index = self.min_vt()
         return self.pending_queue.pop(job_index)
+
+
+class BVT(Stride):
+    """BVT scheduler (Duda and Cheriton 1999)"""
+
+    def __init__(self):
+        Stride.__init__(self)
+
+        # context-switch allowance (10ms)
+        self.C = 10000
+
+        self.second_best_job = None
+
+    def choose_job(self):
+        # return the job with minimum virtual time if we idled or there was only one job
+        if self.current_job is None or self.second_best_job is None:
+            dummy, job_index = self.min_vt()
+            return self.pending_queue.pop(job_index)
+
+        min_vt, job_index = self.min_vt(skip_jobs=set([self.current_job, self.second_best_job]))
+
+        second_best_vt = self.thread_vt(self.second_best_job.thread)
+        current_vt     = self.thread_vt(self.current_job.thread)
+
+        # return job with minimum virtual time if another eligible job arrived in the meantime
+        if min_vt > 0 and second_best_vt >= min_vt and current_vt >= min_vt:
+            return self.pending_queue.pop(job_index)
+
+        # second_best_vt is still the second best, see if we keep current job
+        if (current_vt - second_best_vt)*self.current_job.weight < self.C:
+            return self.pending_queue.pop(self.pending_queue.index(self.current_job))
+
+        # return second best job
+        return self.pending_queue.pop(self.pending_queue.index(self.second_best_job))
+
+    def time_slice(self, j):
+        # if j is the only job, run until preemption
+        if len(self.pending_queue) == 0:
+            return self.time_until(self.next_preemption())
+
+        # find job with the second lowest virtual time
+        next_vt, next_index = self.min_vt(skip_jobs=set([j]))
+        min_vt = self.thread_vt(j.thread)
+
+        self.second_best_job = self.pending_queue[next_index]
+
+        # allow j to run for C ahead of the second best job or until the next preemption
+        return min((next_vt - min_vt)*j.weight + self.C, self.time_until(self.next_preemption()))
 
 
 class BaseHw(Scheduler):
