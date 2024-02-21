@@ -46,6 +46,9 @@ class Job(object):
         self.finish_event   = event
         self.priority       = int(prio)
 
+    def runtime_left(self):
+        return max(self.execution_time - self.executed_time, 0)
+
     def restart(self, completion_time):
         """
         Creates a new Job if this Job is restarted after completion. The new
@@ -284,10 +287,10 @@ class Scheduler(object):
         -------
         True if j has been completed.
         """
-        executed = min(self.time - self.last_time, j.execution_time - j.executed_time)
+        executed = min(self.time - self.last_time, j.runtime_left())
         self.update_job(j, executed)
 
-        if j.executed_time == j.execution_time:
+        if j.runtime_left() == 0:
             j.finish_time = self.last_time + executed
             self.finish_job(j)
             self.last_time = self.time
@@ -356,7 +359,7 @@ class Scheduler(object):
 
         if len(self.pending_queue):
             self.current_job = self.choose_job()
-            self.time += self.time_slice(self.current_job)
+            self.time += min(self.time_slice(self.current_job), self.current_job.runtime_left())
         elif self.idle():
             self.do_idle()
         else:
