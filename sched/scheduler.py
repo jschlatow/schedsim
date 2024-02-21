@@ -324,6 +324,15 @@ class Scheduler(object):
 
         return min(candidates)
 
+    def time_until(self, t):
+        if t == float('inf'):
+            return t
+
+        if t < self.time:
+            raise Exception("Cannot compute time delta to a past timestamp.")
+
+        return t - self.time
+
     def execute(self, reader):
         """Executes the jobs provided by the reader"""
         self.reader = reader
@@ -509,6 +518,6 @@ class BaseHw(Scheduler):
     def time_slice(self, j):
         time_left_in_superperiod = self.last_superperiod + self.SUPERPERIOD - self.time
         if self.quota[j.thread] > 0:
-            return min(self.TIME_SLICE, self.next_preemption(), self.quota[j.thread], time_left_in_superperiod)
+            return min(self.TIME_SLICE, self.time_until(self.next_preemption()), self.quota[j.thread], time_left_in_superperiod)
         else:
-            return min(self.TIME_SLICE, self.next_preemption(), time_left_in_superperiod)
+            return min(self.TIME_SLICE, self.time_until(self.next_preemption()), time_left_in_superperiod)
