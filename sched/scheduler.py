@@ -1,4 +1,5 @@
 import numpy as np
+import math
 
 class Job(object):
     """
@@ -430,7 +431,7 @@ class Stride(Scheduler):
         Scheduler.update_job(self, j, executed)
 
         # update virtual time
-        self.thread_vt(j.thread, executed / j.weight)
+        self.thread_vt(j.thread, math.ceil(executed / j.weight))
 
     def start_job(self, j):
         # initialise the thread's virtual time
