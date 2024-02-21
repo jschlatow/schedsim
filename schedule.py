@@ -26,6 +26,19 @@ elif args.policy == "bvt":
 
 s.execute(trace)
 
+# print stats
+print()
+print("Latencies:")
+for th in sorted(s.response_times.keys()):
+    values = s.response_times[th]
+    print("\tThread%s (%d) \tmin: %d\tavg: %d\tmax: %d" % (th, len(values), min(values), sum(values) / len(values), max(values)))
+
+print()
+print("Context switches:")
+for th in sorted(s.response_times.keys()):
+    trace_times = [ts for (t, ts, w) in s.trace if t == th]
+    print("\tThread%s: %d" % (th, len(trace_times)/2))
+
 if args.plot_latencies:
     # plot response time distribution
     plot.LatencyPlot(s.response_times).show()
