@@ -354,17 +354,21 @@ class Scheduler(object):
 
     def schedule(self):
         """Performs a scheduling decision"""
-        self.take_ready_jobs()
-
+        current_job_finished = True
         if self.current_job != None:
             if not self.try_finish_job(self.current_job):
-                self.reinsert_job(self.current_job)
+                current_job_finished = False
 
         print("[%07d] %s" % (self.time, self.current_job))
 
+        if current_job_finished:
+            self.current_job = None
+
         # check whether there is any restarted job ready
-        self.current_job = None
         self.take_ready_jobs()
+
+        if self.current_job is not None:
+            self.reinsert_job(self.current_job)
 
         if len(self.pending_queue):
             self.current_job = self.choose_job()
