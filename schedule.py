@@ -2,6 +2,7 @@
 
 import os
 import argparse
+import numpy as np
 from sched import reader
 from sched import scheduler
 from plot  import plot
@@ -28,20 +29,31 @@ s.execute(trace)
 
 # print stats
 print()
-print("Latencies:")
-for th in sorted(s.response_times.keys()):
-    values = s.response_times[th]
-    print("\tThread%s (%d) \tmin: %d\tavg: %d\tmax: %d" % (th, len(values), min(values), sum(values) / len(values), max(values)))
+print("Response times:")
+response_times = s.response_times()
+for th in sorted(response_times.keys()):
+    values = response_times[th]
+    print("Thread%s (%d) \tmin: %d\tmean: %d\tmedian: %d\tmax: %d" % (th, len(values), min(values), np.mean(values), np.median(values), max(values)))
+
+print()
+print("Scheduling latencies:")
+sched_latencies = s.sched_latencies()
+for th in sorted(sched_latencies.keys()):
+    values = sched_latencies[th]
+    extra = ""
+    if min(values) == 0:
+        extra = "\t"
+    print("Thread%s (%d) \tmin: %d%s\tmean: %d\tmedian: %d\tmax: %d" % (th, len(values), min(values), extra, np.mean(values), np.median(values), max(values)))
 
 print()
 print("Context switches:")
-for th in sorted(s.response_times.keys()):
+for th in sorted(response_times.keys()):
     trace_times = [ts for (t, ts, w) in s.trace if t == th]
     print("\tThread%s: %d" % (th, len(trace_times)/2))
 
 if args.plot_latencies:
     # plot response time distribution
-    plot.LatencyPlot(s.response_times).show()
+    plot.LatencyPlot(response_times,  "Response time", sched_latencies, "Scheduling latency").show()
 
 # plot virtual time and fairness
 plot.FairnessPlot(s.trace).show()

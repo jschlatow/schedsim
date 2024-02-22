@@ -5,15 +5,24 @@ import matplotlib.pyplot as plt
 # plot latency results as violing plot
 class LatencyPlot(object):
 
-    def __init__(self, data):
+    def __init__(self, data1, name1, data2, name2):
         # data is a dictionary mapping threads to lists of latencies
 
         # create pandas dataframe from data
-        self.df = pd.DataFrame(data={'Thread' : data.keys(), 'Latency' : data.values()}).explode('Latency', ignore_index=True)
-        self.df = self.df.astype({'Latency' : 'int64'})
+        self.df1 = pd.DataFrame(data={'Thread' : data1.keys(), name1 : data1.values()}).explode(name1, ignore_index=True)
+        self.df1 = self.df1.astype({name1 : 'int64'})
+        self.name1 = name1
+
+        self.df2 = pd.DataFrame(data={'Thread' : data2.keys(), name2 : data2.values()}).explode(name2, ignore_index=True)
+        self.df2 = self.df2.astype({name2 : 'int64'})
+        self.name2 = name2
+
 
     def show(self):
-        sns.violinplot(data=self.df, x='Thread', y='Latency', inner='point')
+        fig, axs = plt.subplots(nrows=2)
+        order = sorted(set(self.df1['Thread']))
+        sns.violinplot(data=self.df1, x='Thread', y=self.name1, inner='point', ax=axs[0], order=order)
+        sns.violinplot(data=self.df2, x='Thread', y=self.name2, inner='point', ax=axs[1], order=order)
         plt.show()
 
 

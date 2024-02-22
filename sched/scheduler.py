@@ -172,8 +172,8 @@ class Scheduler(object):
         # list of restarted jobs (waiting for their arrival time)
         self.restarted_jobs = list()
 
-        # dictionary of resulting response times indexed by thread name
-        self.response_times = dict()
+        # dictionary of arrival, start and completion times indexed by thread name
+        self.latency_trace = dict()
 
         # resulting execution trace
         self.trace = list()
@@ -186,6 +186,36 @@ class Scheduler(object):
 
         # default time-slice length in microseoncs
         self.TIME_SLICE = 10000
+
+    def _timedeltas(self, series):
+        # return the difference between every even and odd value in series
+        series = np.reshape(series, (-1, 2))
+        deltas = np.diff(series)
+        return np.reshape(deltas, -1)
+
+    def response_times(self):
+        """Return dict with response times list for each thread"""
+        response_times = dict()
+        for th, series in self.latency_trace.items():
+            # first value is arrival, second is start, third is completion
+            #  -> mask start values
+            mask = np.ones(len(series), dtype=bool)
+            mask[np.arange(1, len(series), 3)] = False
+            response_times[th] = self._timedeltas(np.array(series)[mask])
+
+        return response_times
+
+    def sched_latencies(self):
+        """Return dict with scheduling latency list for each thread"""
+        latencies = dict()
+        for th, series in self.latency_trace.items():
+            # first value is arrival, second is start, third is completion
+            #  -> mask completion values
+            mask = np.ones(len(series), dtype=bool)
+            mask[np.arange(2, len(series), 3)] = False
+            latencies[th] = self._timedeltas(np.array(series)[mask])
+
+        return latencies
 
     def start_job(self, j):
         """
@@ -206,6 +236,13 @@ class Scheduler(object):
             print("Unable to schedule thread which still has a job in queue: %s" % j)
         else:
             print("Thread%s started at %d" % (j.thread, j.arrival))
+
+            # add arrival time to latency trace
+            if j.thread not in self.latency_trace:
+                self.latency_trace[j.thread] = list()
+            self.latency_trace[j.thread].append(j.arrival)
+
+            # insert job
             self.insert_job(j)
 
     def insert_job(self, j):
@@ -225,10 +262,8 @@ class Scheduler(object):
                 Job to be completed
         """
         print("Thread%s finished at %d" % (j.thread, j.finish_time))
-        # calculate and save response time
-        if j.thread not in self.response_times:
-            self.response_times[j.thread] = list()
-        self.response_times[j.thread].append(j.finish_time - j.arrival)
+        # add completion time to latency trace
+        self.latency_trace[j.thread].append(j.finish_time)
 
         # schedule waiting jobs that are triggered by finish event
         if j.finish_event in self.waiting_jobs:
@@ -276,7 +311,15 @@ class Scheduler(object):
             executed : int
                 time interval for which j has been executed
         """
+
+        # add start time to latency trace
+        if j.executed_time <= 0 and not hasattr(j, "started"):
+            j.started = True
+            self.latency_trace[j.thread].append(self.last_time)
+
         j.executed_time += executed
+
+        # trace execution
         self.trace.append([j.thread, self.last_time,            j.weight])
         self.trace.append([j.thread, self.last_time + executed, j.weight])
 
