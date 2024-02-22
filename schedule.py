@@ -11,6 +11,7 @@ parser = argparse.ArgumentParser(description="Simulate CPU scheduler")
 parser.add_argument("filename", type=str)
 parser.add_argument("--policy", choices=["rr", "stride", "base-hw", "bvt"], default="rr")
 parser.add_argument("--plot_latencies", action="store_true")
+parser.add_argument("--plot_trace", action="store_true")
 
 args = parser.parse_args()
 
@@ -54,6 +55,9 @@ for th in sorted(response_times.keys()):
 if args.plot_latencies:
     # plot response time distribution
     plot.LatencyPlot(response_times,  "Response time", sched_latencies, "Scheduling latency").show()
+
+if args.plot_trace:
+    plot.TracePlot(s.latency_trace).show()
 
 # plot virtual time and fairness
 plot.FairnessPlot(s.trace).show()

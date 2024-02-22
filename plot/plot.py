@@ -1,6 +1,7 @@
 import seaborn as sns
 import pandas as pd
 import matplotlib.pyplot as plt
+import numpy as np
 
 # plot latency results as violing plot
 class LatencyPlot(object):
@@ -23,6 +24,41 @@ class LatencyPlot(object):
         order = sorted(set(self.df1['Thread']))
         sns.violinplot(data=self.df1, x='Thread', y=self.name1, inner='point', ax=axs[0], order=order)
         sns.violinplot(data=self.df2, x='Thread', y=self.name2, inner='point', ax=axs[1], order=order)
+        plt.show()
+
+
+class TracePlot(object):
+
+    def __init__(self, data):
+        # data is a dictionary mapping threads to lists of activation, start and completion times
+        self.data = data
+
+    def show(self):
+        colors = [sns.color_palette('pastel')[0], sns.color_palette()[0]]
+        fig, ax = plt.subplots()
+
+        yheight = 6
+        ydist   = 10
+        ycur    = ydist
+        yticks  = list()
+        ylables = list()
+
+        for th, series in self.data.items():
+            times   = np.array(series).reshape((-1, 3))
+            deltas  = np.diff(times)
+            arrival_ranges = np.column_stack((times[:,0],deltas[:,0]))
+            running_ranges = np.column_stack((times[:,1],deltas[:,1]))
+            xranges = np.reshape(np.hstack((arrival_ranges, running_ranges)),(-1,2))
+            ax.broken_barh(xranges, (ycur, yheight), facecolors=colors)
+            yticks.append(ycur+yheight/2)
+            ylables.append(th)
+            ycur += ydist
+
+        ax.set_ylabel('Thread')
+        ax.set_xlabel('Real time')
+        ax.set_yticks(yticks, labels=ylables)
+        ax.grid(True)
+
         plt.show()
 
 
