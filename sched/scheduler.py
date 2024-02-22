@@ -531,7 +531,9 @@ class BVT(Stride):
             dummy, job_index = self.min_vt()
             return self.pending_queue.pop(job_index)
 
-        min_vt, job_index = self.min_vt(skip_jobs=set([self.current_job, self.second_best_job]))
+        skip_jobs = [self.current_job, self.second_best_job]
+        skip_jobs += [j for j in self.pending_queue if hasattr(j, 'started')]
+        min_vt, job_index = self.min_vt(skip_jobs=set(skip_jobs))
 
         second_best_vt = self.thread_vt(self.second_best_job.thread)
         current_vt     = self.thread_vt(self.current_job.thread)
