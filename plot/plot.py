@@ -62,6 +62,20 @@ class TracePlot(object):
         plt.show()
 
 
+class HistPlot(object):
+
+    def __init__(self, data, name):
+        # data is a dictionary mapping threads to list of time intervals
+
+        self.name = name
+        self.df = pd.DataFrame(data={'Thread' : data.keys(), name : data.values()}).explode(name, ignore_index=True)
+        self.df = self.df.astype({name : 'int64'})
+
+    def show(self):
+        sns.displot(data=self.df, x=self.name, col='Thread', col_wrap=2)
+        plt.show()
+
+
 class FairnessPlot(object):
 
     def __init__(self, data):

@@ -11,7 +11,8 @@ parser = argparse.ArgumentParser(description="Simulate CPU scheduler")
 parser.add_argument("filename", type=str)
 parser.add_argument("--policy", choices=["rr", "stride", "base-hw", "bvt"], default="rr")
 parser.add_argument("--plot_latencies", action="store_true")
-parser.add_argument("--plot_trace", action="store_true")
+parser.add_argument("--plot_trace",     action="store_true")
+parser.add_argument("--plot_slices",    action="store_true")
 
 args = parser.parse_args()
 
@@ -48,9 +49,9 @@ for th in sorted(sched_latencies.keys()):
 
 print()
 print("Context switches:")
+time_slices = s.time_slices()
 for th in sorted(response_times.keys()):
-    trace_times = [ts for (t, ts, w) in s.trace if t == th]
-    print("\tThread%s: %d" % (th, len(trace_times)/2))
+    print("\tThread%s: %d" % (th, len(time_slices[th])-1))
 
 if args.plot_latencies:
     # plot response time distribution
@@ -58,6 +59,9 @@ if args.plot_latencies:
 
 if args.plot_trace:
     plot.TracePlot(s.latency_trace).show()
+
+if args.plot_slices:
+    plot.HistPlot(time_slices, "Time slice length").show()
 
 # plot virtual time and fairness
 plot.FairnessPlot(s.trace).show()

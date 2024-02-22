@@ -217,6 +217,25 @@ class Scheduler(object):
 
         return latencies
 
+    def time_slices(self):
+        """Return dict with time slice lengths for each thread"""
+
+        slices = dict()
+
+        # first extract list of time stamps for each thread
+        for (thread, time, weight) in self.trace:
+            if thread not in slices:
+                slices[thread] = list()
+
+            slices[thread].append(time)
+
+        # calculate slices for each thread
+        for th in slices:
+            series = np.reshape(slices[th], (-1,2))
+            slices[th] = np.reshape(np.diff(series), -1)
+
+        return slices
+
     def start_job(self, j):
         """
         Start a job by adding it to the pending queue.
