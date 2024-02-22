@@ -206,7 +206,11 @@ class Scheduler(object):
             print("Unable to schedule thread which still has a job in queue: %s" % j)
         else:
             print("Thread%s started at %d" % (j.thread, j.arrival))
-            self.pending_queue.append(j)
+            self.insert_job(j)
+
+    def insert_job(self, j):
+        """Insert new job into pending queue"""
+        self.pending_queue.append(j)
 
     def finish_job(self, j):
         """
@@ -399,6 +403,23 @@ class Stride(Scheduler):
 
         # we need to store the last virtual time of each thread
         self.last_vtime = dict()
+
+    def insert_job(self, j):
+        # insert new jobs at the head of the queue according to their weight
+        #  such that new jobs with higher weight are chosen before new jobs with
+        #  lower weight before old jobs
+        for i in range(len(self.pending_queue)):
+            if hasattr(self.pending_queue[i], "started"):
+                # insert just before any already started job
+                self.pending_queue.insert(i, j)
+                return
+
+            # insert before any not-started job with lower or equal weight
+            if j.weight >= self.pending_queue[i].weight:
+                self.pending_queue.insert(i, j)
+                return
+
+        self.pending_queue.append(j)
 
     def thread_vt(self, t, increment=0):
         """Returns the (incremented) virtual time of a thread."""
