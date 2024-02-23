@@ -1,4 +1,4 @@
 thread	start	runtime	weight	priority
-A	every 90ms	31ms	45	0
-B	every 90ms	31ms	45	0
-C	0.2s	0.1s	10	0
+A	every 90ms	31ms	45	1
+B	every 90ms	31ms	45	1
+C	0.2s	0.1s	10	1
