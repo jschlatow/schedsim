@@ -561,10 +561,8 @@ class BVT(Stride):
         if min_vt > 0 and second_best_vt >= min_vt and current_vt >= min_vt:
             return self.pending_queue.pop(job_index)
 
-        allowance = self.C if hasattr(self.second_best_job, 'started') else 0
-
         # second_best_vt is still the second best, see if we keep current job
-        if (current_vt - second_best_vt)*self.current_job.weight < allowance:
+        if (current_vt - second_best_vt)*self.current_job.weight < self.C:
             return self.pending_queue.pop(self.pending_queue.index(self.current_job))
 
         # return second best job
@@ -580,10 +578,9 @@ class BVT(Stride):
         min_vt = self.thread_vt(j.thread)
 
         self.second_best_job = self.pending_queue[next_index]
-        allowance = self.C if not hasattr(j, 'started') or hasattr(self.second_best_job, 'started') else 0
 
         # allow j to run for C ahead of the second best job or until the next preemption
-        return min((next_vt - min_vt)*j.weight + allowance, self.time_until(self.next_preemption()))
+        return min((next_vt - min_vt)*j.weight + self.C, self.time_until(self.next_preemption()))
 
 
 class BaseHw(Scheduler):
