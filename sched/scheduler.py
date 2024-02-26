@@ -1,5 +1,7 @@
 import numpy as np
+import pandas as pd
 import math
+from itertools import islice
 
 class Job(object):
     """
@@ -236,6 +238,43 @@ class Scheduler(object):
 
         return slices
 
+    def _as_intervals(self, lst):
+        it = iter(lst)
+        return iter(lambda: tuple(islice(it, 2)), ())
+
+    def cpu_shares(self):
+        """Return fractional CPU share for every thread from first activation to last completion"""
+
+        thread_times = {'idle' : list()}
+        for (th, time, weight) in self.trace:
+            if th not in thread_times:
+                thread_times[th] = list()
+            thread_times[th].append(time)
+
+        # create pandas Intervals from idle times
+        idle_intervals = list()
+        for start, end in self._as_intervals(thread_times['idle']):
+            idle_intervals.append(pd.Interval(start, end, closed='left'))
+
+        # iterate threads
+        shares = dict()
+        for th, series in self.latency_trace.items():
+            activity_interval = pd.Interval(series[0], series[-1], closed='left')
+            total_time = activity_interval.length
+
+            # sum up executions
+            cpu_time = 0
+            for start, end in self._as_intervals(thread_times[th]):
+                cpu_time += end - start
+
+            for idle in idle_intervals:
+                if idle.overlaps(activity_interval):
+                    total_time -= idle.length
+
+            shares[th] = cpu_time / total_time
+
+        return shares
+
     def start_job(self, j):
         """
         Start a job by adding it to the pending queue.
@@ -373,6 +412,8 @@ class Scheduler(object):
 
     def do_idle(self):
         """Advances time to the arrival of the next job"""
+        self.trace.append(['idle', self.time,              1])
+        self.trace.append(['idle', self.next_preemption(), 1])
         self.current_job = None
         self.time      = self.next_preemption()
         self.last_time = self.time

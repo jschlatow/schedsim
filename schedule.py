@@ -53,6 +53,12 @@ time_slices = s.time_slices()
 for th in sorted(response_times.keys()):
     print("\tThread%s: %d" % (th, len(time_slices[th])-1))
 
+print()
+print("CPU shares:")
+shares = s.cpu_shares()
+for th in sorted(shares.keys()):
+    print("\tThread%s: %f" % (th, shares[th]))
+
 if args.plot_latencies:
     # plot response time distribution
     plot.LatencyPlot(response_times,  "Response time", sched_latencies, "Scheduling latency").show()
