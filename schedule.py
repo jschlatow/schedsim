@@ -9,7 +9,7 @@ from plot  import plot
 
 parser = argparse.ArgumentParser(description="Simulate CPU scheduler")
 parser.add_argument("filename", type=str)
-parser.add_argument("--policy", choices=["rr", "stride", "base-hw", "bvt"], default="rr")
+parser.add_argument("--policy", choices=["rr", "stride", "base-hw", "bvt", "bvt-nowarp"], default="rr")
 parser.add_argument("--plot_latencies", action="store_true")
 parser.add_argument("--plot_trace",     action="store_true")
 parser.add_argument("--plot_slices",    action="store_true")
@@ -25,7 +25,9 @@ elif args.policy == "stride":
 elif args.policy == "base-hw":
     s = scheduler.BaseHw()
 elif args.policy == "bvt":
-    s = scheduler.BVT()
+    s = scheduler.BVT(warp=True)
+elif args.policy == "bvt-nowarp":
+    s = scheduler.BVT(warp=False)
 
 s.execute(trace)
 

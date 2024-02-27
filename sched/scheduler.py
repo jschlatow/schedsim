@@ -599,29 +599,102 @@ class Stride(Scheduler):
 class BVT(Stride):
     """BVT scheduler (Duda and Cheriton 1999)"""
 
-    def __init__(self):
+    def __init__(self, warp=True):
         Stride.__init__(self)
 
         # context-switch allowance (10ms)
         self.C = 10000
 
+        # warp value, warp-time limit and unwarp time requirement for priorities 0 to 4
+        if warp:
+            self.warp        = [0, 10000, 20000, 30000, 40000]
+            self.warp_limit  = [0, 20000, 20000, 20000, 20000]
+            self.unwarp_time = [0,     0,     0,     0,     0]
+        else:
+            self.warp        = [0     ,0,     0,     0,     0]
+
+        # store end time of last unwarp event for every thread
+        self.unwarp_end = dict()
+
         self.second_best_job = None
+
+    def update_job(self, j, executed):
+        # save warped execution time
+        if hasattr(j, "warped") and j.warped:
+            j.warp_time += executed
+
+        Stride.update_job(self, j, executed)
+
+    def start_job(self, j):
+        """Start job j and warp if allowed on j's priority"""
+        Stride.start_job(self, j)
+        if self.warp[j.priority] > 0:
+            j.warped = True
+            j.warp_time = 0
+            if j.thread in self.unwarp_end and self.unwarp_end[j.thread] > self.time:
+                j.warped = False
+
+    def finish_job(self, j):
+        """Unwarp job j before finishing"""
+        if hasattr(j, "warped") and j.warped:
+            self.unwarp(j)
+        Scheduler.finish_job(self, j)
+
+    def warp_time_left(self, j):
+        """Return the time when job j is forced to unwarp"""
+        warp_limit = self.warp_limit[j.priority]
+        if not hasattr(j, "warped") or not j.warped or warp_limit == 0:
+            return float('inf')
+
+        if j.warp_time < warp_limit:
+            return warp_limit - j.warp_time
+
+        return 0
+
+    def unwarp(self, j):
+        j.warped = False
+        self.unwarp_end[j.thread] = self.time + self.unwarp_time[j.priority]
+
+    def evt(self, j):
+        """Returns the effective virtual time of job j"""
+        warp = self.warp[j.priority]
+        if not hasattr(j, "warped") or not j.warped:
+            warp = 0
+        elif self.warp_time_left(j) == 0:
+            warp = 0
+            self.unwarp(j)
+
+        avt = self.avt(j)
+        if not warp:
+            return avt
+
+        return avt - warp
+
+    def min_evt(self, skip_jobs=set()):
+        """
+        Finds the minimum effective virtual time of all pending jobs
+
+        Returns
+        -------
+        [minimum virtual time, index of job with minimum virtual time]
+        """
+        return self._min_vt(vt=lambda j: self.evt(j), skip_jobs=skip_jobs)
 
     def choose_job(self):
         # return the job with minimum virtual time if we idled or there was only one job
         if self.current_job is None or self.second_best_job is None:
-            dummy, job_index = self.min_vt()
+            dummy, job_index = self.min_evt()
             return self.pending_queue.pop(job_index)
 
         skip_jobs = [self.current_job, self.second_best_job]
         skip_jobs += [j for j in self.pending_queue if hasattr(j, 'started')]
-        min_vt, job_index = self.min_vt(skip_jobs=set(skip_jobs))
+        min_vt, job_index = self.min_evt(skip_jobs=set(skip_jobs))
 
-        second_best_vt = self.thread_vt(self.second_best_job.thread)
-        current_vt     = self.thread_vt(self.current_job.thread)
+        second_best_vt = self.evt(self.second_best_job)
+        current_vt     = self.evt(self.current_job)
 
         # return job with minimum virtual time if another eligible job arrived in the meantime
-        if min_vt > 0 and second_best_vt >= min_vt and current_vt >= min_vt:
+        if min_vt is not None and second_best_vt >= min_vt and current_vt >= min_vt:
             return self.pending_queue.pop(job_index)
 
         # second_best_vt is still the second best, see if we keep current job
@@ -636,14 +709,17 @@ class BVT(Stride):
         if len(self.pending_queue) == 0:
             return self.time_until(self.next_preemption())
 
-        # find job with the second lowest virtual time
-        next_vt, next_index = self.min_vt(skip_jobs=set([j]))
-        min_vt = self.thread_vt(j.thread)
+        # find job with the second lowest actual virtual time
+        next_vt, next_index = self.min_evt(skip_jobs=set([j]))
+        min_vt = self.evt(j)
 
         self.second_best_job = self.pending_queue[next_index]
 
-        # allow j to run for C ahead of the second best job or until the next preemption
-        return min((next_vt - min_vt)*j.weight + self.C, self.time_until(self.next_preemption()))
+        # allow j to run for C ahead of the second best job,
+        # until the next preemption or until its warp limit
+        return min((next_vt - min_vt)*j.weight + self.C,
+                    self.time_until(self.next_preemption()),
+                    self.warp_time_left(j))
 
 
 class BaseHw(Scheduler):
