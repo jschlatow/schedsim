@@ -524,17 +524,29 @@ class Stride(Scheduler):
 
         self.pending_queue.append(j)
 
+    def avt(self, j):
+        """Returns actual virtual time of a job"""
+        return self.thread_vt(j.thread)
+
     def thread_vt(self, t, increment=0):
         """Returns the (incremented) virtual time of a thread."""
         if t not in self.last_vtime:
-            self.last_vtime[t], dummy = self.min_vt()
+            self.last_vtime[t] = self.svt()
 
         if increment > 0:
             self.last_vtime[t] += increment
 
         return self.last_vtime[t]
 
-    def min_vt(self, skip_jobs=set()):
+    def svt(self):
+        """Returns the scheduler virtual time"""
+        if len(self.pending_queue) == 0 and self.current_job is None:
+            return 0
+
+        min_avt, dummy = self.min_avt()
+        return min_avt
+
+    def _min_vt(self, vt, skip_jobs=set()):
         """
         Finds the minimum virtual time of all pending jobs
 
@@ -542,14 +554,24 @@ class Stride(Scheduler):
         -------
         [minimum virtual time, index of job with minimum virtual time]
         """
-        vtimes = [self.thread_vt(j.thread) if j not in skip_jobs else float('inf') for j in self.pending_queue]
+        vtimes = [vt(j) if j not in skip_jobs else float('inf') for j in self.pending_queue]
         if self.current_job is not None and self.current_job not in skip_jobs:
-            vtimes.append(self.thread_vt(self.current_job.thread))
+            vtimes.append(vt(self.current_job))
 
         if len(vtimes) == 0:
-            return [0, 0]
+            return [None, None]
 
         return [np.min(vtimes), np.argmin(vtimes)]
+
+    def min_avt(self):
+        """
+        Finds the minimum actual virtual time of all pending jobs
+
+        Returns
+        -------
+        [minimum virtual time, index of job with minimum virtual time]
+        """
+        return self._min_vt(vt=lambda j: self.avt(j))
 
     def update_job(self, j, executed):
         Scheduler.update_job(self, j, executed)
@@ -561,8 +583,8 @@ class Stride(Scheduler):
         # initialise the thread's virtual time
         vt = self.thread_vt(j.thread)
 
-        # a thread with lower virtual time than min_vt must be adapted to  min_vt
-        min_vt, dummy = self.min_vt()
+        # a thread with lower virtual time than SVT must be adapted to SVT
+        min_vt = self.svt()
         if min_vt > vt:
             self.thread_vt(j.thread, min_vt - vt)
 
@@ -570,7 +592,7 @@ class Stride(Scheduler):
 
     def choose_job(self):
         """Returns the job with the minimum virtual time"""
-        dummy, job_index = self.min_vt()
+        dummy, job_index = self.min_avt()
         return self.pending_queue.pop(job_index)
 
 
