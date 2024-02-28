@@ -610,14 +610,14 @@ class BVT(Stride):
         # context-switch allowance (10ms)
         self.C = 10000
 
-        # warp value, warp-time limit and unwarp time requirement for priorities 0 to 4
+        # warp value, warp-time limit and unwarp time requirement for priorities 0 to 3
         if warp:
-            self.warp        = [0, 10000, 20000, 30000, 40000]
-            self.warp_limit  = [0, 20000, 20000, 20000, 20000]
-            self.unwarp_time = [0,     0,     0,     0,     0]
+            self.warp        = [0,   5000, 1000000, 2000000]
+            self.warp_limit  = [0,  50000,   20000,   20000]
+            self.unwarp_time = [0,      0,       0,       0]
         else:
-            self.warp_limit  = [0,      0,     0,     0,    0]
-            self.warp        = [0,      0,     0,     0,    0]
+            self.warp_limit  = [0,      0,       0,       0]
+            self.warp        = [0,      0,       0,       0]
 
         # store end time of last unwarp event for every thread
         self.unwarp_end = dict()
