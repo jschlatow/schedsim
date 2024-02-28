@@ -1,3 +1,6 @@
+# This example comprises 3 threads with 2 jobs each. The second job of thread C
+# has a smaller weight and therefore receives a smaller CPU share.
+
 thread	start	runtime	weight
 A	0s	1s	2
 B	0s	1s	2

@@ -1,3 +1,14 @@
+# This test comprises two periodic threads with same period, runtime and
+# priority but different weight. Both threads run concurrently to a long-running
+# job of another thread with less weight but same priority. For some scheduling
+# policies, the difference in weights of threads A and B may influence the
+# schedule and the resulting latencies.
+#
+# Stride scheduling deals very well with this setup in terms of maximum response
+# times. Counterintuitively, for BVT, the average (mean and median) response
+# times of A are better despite the lower weight of A. B gets significanly worse
+# average response times compared to stride scheduling.
+
 thread	start	runtime	weight	priority
 A	every 90ms	15ms	30	1
 B	every 90ms	15ms	60	1

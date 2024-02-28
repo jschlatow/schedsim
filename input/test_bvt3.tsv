@@ -1,3 +1,10 @@
+# This test is similar to test_bvt1 but changes the runtime of threads A and B.
+# For BVT, this changes 
+#
+# BVT achieves (significantly) better response times for A and B compared to
+# stride scheduling. The larger job lengths in combination with the weight
+# difference between A and B let BVT run job B ahead of A.
+
 thread	start	runtime	weight	priority
 A	every 90ms	25ms	30	1
 B	every 90ms	25ms	60	1

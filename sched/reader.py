@@ -8,7 +8,7 @@ class WorkloadReader(object):
     def __init__(self, filename):
         self.joblist = list()
         with open(filename) as f:
-            reader = csv.DictReader(f, delimiter='\t')
+            reader = csv.DictReader(self.decomment(f), delimiter='\t')
             for row in reader:
                 runtime = pd.Timedelta(row['runtime'])
                 runtime_us = runtime.seconds * 1000 * 1000 + runtime.microseconds
@@ -45,6 +45,11 @@ class WorkloadReader(object):
                                         prio=prio,
                                         event=event))
 
+    def decomment(self, csvfile):
+        for row in csvfile:
+            raw = row.split('#')[0].strip()
+            if raw:
+                yield raw
 
     def empty(self):
         return len(self.joblist) == 0

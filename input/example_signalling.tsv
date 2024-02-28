@@ -1,3 +1,7 @@
+# This example demonstrates a completion of a job releases a job of another
+# thread. Note that jobs waiting on a particular event must be listed before
+# the jobs that produce the corresponding event.
+
 thread	start	runtime	weight	event
 C	e1	0.5s	2	
 C	e2	0.5s	1	

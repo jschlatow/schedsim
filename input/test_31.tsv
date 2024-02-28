@@ -1,3 +1,6 @@
+# This is test is similar to test_30 but slightly modified the runtime of
+# threads A and B. Some scheduling policies are sensitive to such changes.
+
 thread	start	runtime	weight	priority
 A	every 90ms	31ms	45	1
 B	every 90ms	31ms	45	1

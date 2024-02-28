@@ -1,3 +1,8 @@
+# This test comprises a long-running job A with high weight and a periodic
+# thread C with small runtime on the same priority. The weight of the latter
+# exactly reflects the computation requirements. For some scheduling policies
+# (e.g. BVT), thread C is restricted in its execution due to its small weight.
+
 thread	start	runtime	weight	priority
 A	0s	0.2s	40	1
 C	every 40ms	5ms	5	1

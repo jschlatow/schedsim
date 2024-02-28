@@ -1,3 +1,6 @@
+# This is a test for running multiple threads concurrently and limit their
+# CPU share proportionally to their weight.
+
 thread	start	runtime	weight	priority
 A	0s	1s	20	2
 B	0s	1s	20	2

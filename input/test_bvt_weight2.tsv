@@ -1,3 +1,7 @@
+# This test is similar to test_bvt_weight1 but slightly increases the weight
+# of thread C. For BVT, thread C is always eligible when it wakes up and is
+# not restricted in its execution anymore.
+
 thread	start	runtime	weight	priority
 A	0s	0.2s	40	1
 C	every 40ms	5ms	6	1

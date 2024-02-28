@@ -1,3 +1,8 @@
+# This test comprises two period threads with the same period, runtime, weight
+# and priority. These two threads run concurrently to a long-running job with
+# a smaller weight but same priority. The threads A and B should receive the
+# same CPU share and achieve similar latencies.
+
 thread	start	runtime	weight	priority
 A	every 90ms	30ms	45	1
 B	every 90ms	30ms	45	1
