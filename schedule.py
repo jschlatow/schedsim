@@ -13,6 +13,7 @@ parser.add_argument("--policy", choices=["rr", "stride", "base-hw", "bvt", "bvt-
 parser.add_argument("--plot_latencies", action="store_true")
 parser.add_argument("--plot_trace",     action="store_true")
 parser.add_argument("--plot_slices",    action="store_true")
+parser.add_argument("--simulation_time", type=int, default=10*1000*1000, help="Maximum simulation time in microseconds")
 
 args = parser.parse_args()
 
@@ -29,7 +30,7 @@ elif args.policy == "bvt":
 elif args.policy == "bvt-nowarp":
     s = scheduler.BVT(warp=False)
 
-s.execute(trace)
+s.execute(trace, max_time=args.simulation_time)
 
 # print stats
 print()

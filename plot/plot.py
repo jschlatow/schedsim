@@ -44,6 +44,8 @@ class TracePlot(object):
         ylables = list()
 
         for th, series in self.data.items():
+            if len(series) % 3 != 0:
+                series = series[0:int(len(series)/3)*3]
             times   = np.array(series).reshape((-1, 3))
             deltas  = np.diff(times)
             arrival_ranges = np.column_stack((times[:,0],deltas[:,0]))

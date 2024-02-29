@@ -201,6 +201,8 @@ class Scheduler(object):
         for th, series in self.latency_trace.items():
             # first value is arrival, second is start, third is completion
             #  -> mask start values
+            if len(series) % 3 != 0:
+                series = series[0:int(len(series)/3)*3]
             mask = np.ones(len(series), dtype=bool)
             mask[np.arange(1, len(series), 3)] = False
             response_times[th] = self._timedeltas(np.array(series)[mask])
@@ -213,6 +215,8 @@ class Scheduler(object):
         for th, series in self.latency_trace.items():
             # first value is arrival, second is start, third is completion
             #  -> mask completion values
+            if len(series) % 3 != 0:
+                series = series[0:int(len(series)/3)*3]
             mask = np.ones(len(series), dtype=bool)
             mask[np.arange(2, len(series), 3)] = False
             latencies[th] = self._timedeltas(np.array(series)[mask])
@@ -441,7 +445,7 @@ class Scheduler(object):
 
         return t - self.time
 
-    def execute(self, reader):
+    def execute(self, reader, max_time=1000*1000*10):
         """Executes the jobs provided by the reader"""
         self.reader = reader
         self.take_next_job()
@@ -450,7 +454,8 @@ class Scheduler(object):
             self.time = self.next_job.arrival
 
         while self.schedule():
-            pass
+            if self.time > max_time:
+                return
 
     def time_slice(self, j):
         """Returns length of the time slice for Job j"""
