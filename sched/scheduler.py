@@ -611,7 +611,8 @@ class BVT(Stride):
             self.warp_limit  = [0, 20000, 20000, 20000, 20000]
             self.unwarp_time = [0,     0,     0,     0,     0]
         else:
-            self.warp        = [0     ,0,     0,     0,     0]
+            self.warp_limit  = [0,      0,     0,     0,    0]
+            self.warp        = [0,      0,     0,     0,    0]
 
         # store end time of last unwarp event for every thread
         self.unwarp_end = dict()
@@ -653,6 +654,13 @@ class BVT(Stride):
 
     def unwarp(self, j):
         j.warped = False
+        # unwarp time is measured from a job's completion or a forced unwarp
+        # the downside is that once a thread needed to wait a long time to be
+        # scheduled, it may not warp when it wakes up next. For periodic threads
+        # this may cause one thread to experience long latencies all the time.
+        # However, only when measured as described above, the unwarp time is
+        # useful for ensuring that there will be some processing time left even
+        # under high-load (e.g. due to high-interrupt frequency) situations.
         self.unwarp_end[j.thread] = self.time + self.unwarp_time[j.priority]
 
     def evt(self, j):
