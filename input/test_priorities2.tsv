@@ -1,0 +1,16 @@
+# This test comprises two periodic threads on priority 1 with same period,
+# runtime and weight. In sum, both threads load the CPU to 100%. By adding
+# a cpu-bound thread on lower priority, we are able to evaluate whether this
+# scenario leads to starvation. When all threads are assigned equal weights
+# they should ideally receive a similar CPU share but threads on higher priority
+# should achieve a lower latency.
+#
+# With base-hw, when we assign threads A and B a share of 33% each. Thread D
+# is only handled after 66% of the super period has passed.
+# For BVT, when all weights are set to 1, thread D will be scheduled after
+# 2*(warptime+runtime) and after that at least every 2*(warptime+C).
+
+thread	start	runtime	weight	priority
+A	every 5ms	2.5ms	33	1
+B	every 5ms	2.5ms	33	1
+D	0s	0.1s	33	0

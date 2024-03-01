@@ -1,0 +1,18 @@
+# This test comprises three periodic threads with same period and priority but
+# different runtimes and weights. The runtimes are set so that each thread
+# request a slightly smaller CPU share than allowed by their weight. The threads
+# run concurrently to a long-running job on lower priority.
+#
+# From this test, we expect that threads A, B and C achieve similar response
+# times. Ideally, the shorter jobs are able to finish earlier.
+# Base-hw handles this scenario very well whereas for BVT, we need to give
+# C a slightly larger CPU share.
+#
+# When we modify B's runtime to exceed its share, the service for thread D
+# degrades in case of base-hw whereas BVT is able to preserve thread D's share.
+
+thread	start	runtime	weight	priority
+A	every 100ms	39ms	40	1
+B	every 100ms	24ms	25	1
+C	every 100ms	14ms	15	1
+D	0.1s	0.5s	30	0
