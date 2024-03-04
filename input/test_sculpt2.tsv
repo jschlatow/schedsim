@@ -1,0 +1,23 @@
+# This test is similar to test_sculpt1 but runs an interactive load on
+# desktop priority. This way, we want to evaluate whether we are able to
+# maintain a certain latency for interactive desktop threads even under high
+# load on higher priorities. On the other hand, MM and DD threads must not
+# be affected by warping of interactive desktop threads.
+
+thread	start	runtime	weight	priority
+DD4	every 60ms	8ms	1	3
+DD3	every 60ms	4ms	1	3
+DD2	every 60ms	2ms	1	3
+DD1	every 60ms	1ms	1	3
+MM1	every 30ms	5ms	2	2
+MM2	every 30ms	5ms	2	2
+Desktop	0s	50ms	8	1
+Desktop	0.1s	50ms	8	1
+Desktop	0.2s	50ms	8	1
+Desktop	0.3s	50ms	8	1
+Desktop	0.4s	50ms	8	1
+Desktop	0.5s	50ms	8	1
+Desktop	0.6s	50ms	8	1
+Desktop	0.7s	50ms	8	1
+Desktop	0.8s	50ms	8	1
+Desktop	0.9s	50ms	8	1
