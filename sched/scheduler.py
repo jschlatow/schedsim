@@ -699,23 +699,12 @@ class BVT(Stride):
             dummy, job_index = self.min_evt()
             return self.pending_queue.pop(job_index)
 
-        skip_jobs = [self.current_job, self.second_best_job]
-        skip_jobs += [j for j in self.pending_queue if hasattr(j, 'started')]
-        min_vt, job_index = self.min_evt(skip_jobs=set(skip_jobs))
-
-        second_best_vt = self.evt(self.second_best_job)
-        current_vt     = self.evt(self.current_job)
-
-        # return job with minimum virtual time if another eligible job arrived in the meantime
-        if min_vt is not None and second_best_vt >= min_vt and current_vt >= min_vt:
-            return self.pending_queue.pop(job_index)
-
-        # second_best_vt is still the second best, see if we keep current job
-        if (current_vt - second_best_vt)*self.current_job.weight < self.C:
-            return self.pending_queue.pop(self.pending_queue.index(self.current_job))
-
-        # return second best job
-        return self.pending_queue.pop(self.pending_queue.index(self.second_best_job))
+        # We always choose the job with minimum EVT. In principle, we could
+        # check whether the current job could still run because it is not ahead
+        # of the second best job. However, this complicates the implementation
+        # without any significant benefits.
+        min_vt, job_index = self.min_evt()
+        return self.pending_queue.pop(job_index)
 
     def time_slice(self, j):
         # if j is the only job, run until preemption
