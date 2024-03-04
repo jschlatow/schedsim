@@ -622,8 +622,6 @@ class BVT(Stride):
         # store end time of last unwarp event for every thread
         self.unwarp_end = dict()
 
-        self.second_best_job = None
-
     def update_job(self, j, executed):
         # save warped execution time
         if hasattr(j, "warped") and j.warped:
@@ -694,16 +692,11 @@ class BVT(Stride):
         return self._min_vt(vt=lambda j: self.evt(j), skip_jobs=skip_jobs)
 
     def choose_job(self):
-        # return the job with minimum virtual time if we idled or there was only one job
-        if self.current_job is None or self.second_best_job is None:
-            dummy, job_index = self.min_evt()
-            return self.pending_queue.pop(job_index)
-
         # We always choose the job with minimum EVT. In principle, we could
         # check whether the current job could still run because it is not ahead
         # of the second best job. However, this complicates the implementation
         # without any significant benefits.
-        min_vt, job_index = self.min_evt()
+        dummy, job_index = self.min_evt()
         return self.pending_queue.pop(job_index)
 
     def time_slice(self, j):
@@ -714,8 +707,6 @@ class BVT(Stride):
         # find job with the second lowest actual virtual time
         next_vt, next_index = self.min_evt(skip_jobs=set([j]))
         min_vt = self.evt(j)
-
-        self.second_best_job = self.pending_queue[next_index]
 
         # allow j to run for C ahead of the second best job,
         # until the next preemption or until its warp limit
