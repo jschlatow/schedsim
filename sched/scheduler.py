@@ -551,16 +551,16 @@ class Stride(Scheduler):
         min_avt, dummy = self.min_avt()
         return min_avt
 
-    def _min_vt(self, vt, skip_jobs=set()):
+    def _min_vt(self, vt, in_jobs=None):
         """
-        Finds the minimum virtual time of all pending jobs
+        Finds the minimum virtual time of jobs in in_jobs (defaults to pending queue).
 
         Returns
         -------
-        [minimum virtual time, index of job with minimum virtual time]
+        [minimum virtual time, index of job with minimum virtual time in pending queue]
         """
-        vtimes = [vt(j) if j not in skip_jobs else float('inf') for j in self.pending_queue]
-        if self.current_job is not None and self.current_job not in skip_jobs:
+        vtimes = [vt(j) if in_jobs is None or j in in_jobs else float('inf') for j in self.pending_queue]
+        if self.current_job is not None and (in_jobs is None or self.current_job in in_jobs):
             vtimes.append(vt(self.current_job))
 
         if len(vtimes) == 0:
@@ -681,7 +681,7 @@ class BVT(Stride):
 
         return avt - warp
 
-    def min_evt(self, skip_jobs=set()):
+    def min_evt(self, in_jobs=None):
         """
         Finds the minimum effective virtual time of all pending jobs
 
@@ -689,7 +689,7 @@ class BVT(Stride):
         -------
         [minimum virtual time, index of job with minimum virtual time]
         """
-        return self._min_vt(vt=lambda j: self.evt(j), skip_jobs=skip_jobs)
+        return self._min_vt(vt=lambda j: self.evt(j), in_jobs=in_jobs)
 
     def choose_job(self):
         # We always choose the job with minimum EVT. In principle, we could
@@ -705,7 +705,7 @@ class BVT(Stride):
             return self.time_until(self.next_preemption())
 
         # find job with the second lowest actual virtual time
-        next_vt, next_index = self.min_evt(skip_jobs=set([j]))
+        next_vt, next_index = self.min_evt(in_jobs=[x for x in self.pending_queue if x is not j])
         min_vt = self.evt(j)
 
         # allow j to run for C ahead of the second best job,
