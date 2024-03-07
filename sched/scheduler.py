@@ -279,7 +279,7 @@ class Scheduler(object):
 
         return shares
 
-    def start_job(self, j):
+    def start_job(self, j, **kwargs):
         """
         Start a job by adding it to the pending queue.
 
@@ -329,8 +329,8 @@ class Scheduler(object):
 
         # schedule waiting jobs that are triggered by finish event
         if j.finish_event in self.waiting_jobs:
-            for wj in self.waiting_jobs.pop(j.finish_event):
-                self.start_job(wj.start(j.finish_time))
+            for wj in self.waiting_jobs[j.finish_event]:
+                self.start_job(wj.start(j.finish_time), signalling_job=j)
 
         # store new job if it restarts itself
         restart_job = j.restart(j.finish_time)
@@ -586,7 +586,7 @@ class Stride(Scheduler):
         # update virtual time
         self.thread_vt(j.thread, math.ceil(executed / j.weight))
 
-    def start_job(self, j):
+    def start_job(self, j, **kwargs):
         # initialise the thread's virtual time
         vt = self.thread_vt(j.thread)
 
@@ -631,12 +631,24 @@ class BVT(Stride):
 
         Stride.update_job(self, j, executed)
 
-    def start_job(self, j):
+    def start_job(self, j, signalling_job=None):
         """Start job j and warp if allowed on j's priority"""
         Stride.start_job(self, j)
-        if self.warp[j.priority] > 0:
-            j.warped = True
-            j.warp_time = 0
+
+        warp       = self.warp[j.priority]
+        warp_limit = self.warp_limit[j.priority]
+        if signalling_job is not None:
+            warp = max(self.warp[signalling_job.priority], warp)
+            if warp_limit == 0:
+                warp_limit = self.warp_limit[signalling_job.priority]
+            elif self.warp_limit[signalling_job.priority] > 0:
+                warp_limit = min(self.warp_limit[signalling_job.priority], warp_limit)
+
+        if warp > 0:
+            j.warped     = True
+            j.warp_limit = warp_limit
+            j.warp       = warp
+            j.warp_time  = 0
             if j.thread in self.unwarp_end and self.unwarp_end[j.thread] > self.time:
                 j.warped = False
 
@@ -648,17 +660,17 @@ class BVT(Stride):
 
     def warp_time_left(self, j):
         """Return the time when job j is forced to unwarp"""
-        warp_limit = self.warp_limit[j.priority]
-        if not hasattr(j, "warped") or not j.warped or warp_limit == 0:
+        if not hasattr(j, "warped") or not j.warped or j.warp_limit == 0:
             return float('inf')
 
-        if j.warp_time < warp_limit:
-            return warp_limit - j.warp_time
+        if j.warp_time < j.warp_limit:
+            return j.warp_limit - j.warp_time
 
         return 0
 
     def unwarp(self, j):
         j.warped = False
+        j.warp = 0
         # unwarp time is measured from a job's completion or a forced unwarp
         # the downside is that once a thread needed to wait a long time to be
         # scheduled, it may not warp when it wakes up next. For periodic threads
@@ -670,14 +682,12 @@ class BVT(Stride):
 
     def warp_value(self, j):
         """Returns warp value for job j"""
-        warp = self.warp[j.priority]
         if not hasattr(j, "warped") or not j.warped:
-            warp = 0
+            return 0
         elif self.warp_time_left(j) == 0:
-            warp = 0
             self.unwarp(j)
 
-        return warp
+        return j.warp
 
     def evt(self, j):
         """Returns the effective virtual time of job j"""
@@ -851,7 +861,7 @@ class BaseHw(Scheduler):
                 print("Thread%s depleted its quota at %s" % (j.thread, self.time))
                 j.one_time_boost = True
 
-    def start_job(self, j):
+    def start_job(self, j, **kwargs):
         if j.thread not in self.quota:
             if j.priority > 0:
                 self.quota[j.thread] = self.SUPERPERIOD / 100 * j.weight
