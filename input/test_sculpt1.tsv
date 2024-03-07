@@ -18,6 +18,13 @@
 # Ideally, all DD and MM threads achieve low latencies. Changing the runtime
 # of DD4 to, e.g., 38ms should not significantly influence the latencies of
 # the other threads. The same holds for MM1/MM2.
+#
+# With BVT and large MM/DD warp values, the desktop thread does not get its
+# full CPU share but the MM/DD threads are able to achieve low latencies.
+#
+# With hierarchical BVT, the number and weights of desktop threads does not
+# matter. The conjunction of all desktop threads will receive a minimum CPU
+# share as defined by the first-level scheduler.
 
 thread	start	runtime	weight	priority
 DD4	every 60ms	8ms	1	3

@@ -398,6 +398,8 @@ class Scheduler(object):
         True if j has been completed.
         """
         executed = min(self.time - self.last_time, j.runtime_left())
+        if executed < 0:
+            raise Exception("Error: executed time has become negative")
         self.update_job(j, executed)
 
         if j.runtime_left() == 0:
@@ -666,8 +668,8 @@ class BVT(Stride):
         # under high-load (e.g. due to high-interrupt frequency) situations.
         self.unwarp_end[j.thread] = self.time + self.unwarp_time[j.priority]
 
-    def evt(self, j):
-        """Returns the effective virtual time of job j"""
+    def warp_value(self, j):
+        """Returns warp value for job j"""
         warp = self.warp[j.priority]
         if not hasattr(j, "warped") or not j.warped:
             warp = 0
@@ -675,7 +677,13 @@ class BVT(Stride):
             warp = 0
             self.unwarp(j)
 
+        return warp
+
+    def evt(self, j):
+        """Returns the effective virtual time of job j"""
+
         avt = self.avt(j)
+        warp = self.warp_value(j)
         if not warp:
             return avt
 
@@ -699,13 +707,16 @@ class BVT(Stride):
         dummy, job_index = self.min_evt()
         return self.pending_queue.pop(job_index)
 
-    def time_slice(self, j):
+    def time_slice(self, j, in_jobs=None):
         # if j is the only job, run until preemption
         if len(self.pending_queue) == 0:
             return self.time_until(self.next_preemption())
 
+        if in_jobs is None:
+            in_jobs = [x for x in self.pending_queue if x is not j]
+
         # find job with the second lowest actual virtual time
-        next_vt, next_index = self.min_evt(in_jobs=[x for x in self.pending_queue if x is not j])
+        next_vt, next_index = self.min_evt(in_jobs=in_jobs)
         min_vt = self.evt(j)
 
         # allow j to run for C ahead of the second best job,
@@ -713,6 +724,90 @@ class BVT(Stride):
         return min((next_vt - min_vt)*j.weight + self.C,
                     self.time_until(self.next_preemption()),
                     self.warp_time_left(j))
+
+
+class BVTSculpt(BVT):
+    """Hierarchical BVT scheduler for Sculpt OS"""
+
+    def __init__(self):
+        BVT.__init__(self, warp=True)
+
+        # first-level scheduler state
+        self.group_vt     = { "LowLatency" : 0, "Desktop" : 0 }
+        self.group_weight = { "LowLatency" : 2, "Desktop" : 1 }
+
+        # With hierarchical BVT, we can lower the warp values for priorities
+        # 2 and 3 because the ratio between the weights of desktop and
+        # low-latency jobs becomes irrelevant.
+        # Moreover, as can eliminate the warp limit on these priorities if
+        # we assume fixed job weights.
+        self.warp        = [0,   5000, 10000, 20000]
+        self.warp_limit  = [0,  50000,     0,     0]
+        self.unwarp_time = [0,      0,     0,     0]
+
+    def update_job(self, j, executed):
+        Stride.update_job(self, j, executed)
+
+        # update group virtual time
+        if j.priority >= 2:
+            self.group_vt['LowLatency'] += math.ceil(executed / self.group_weight['LowLatency'])
+        elif j.priority == 1:
+            self.group_vt['Desktop']    += math.ceil(executed / self.group_weight['Desktop'])
+
+    def choose_job(self):
+        # separate pending queue into low latency jobs (prio 2+3), desktop jobs
+        # (prio 1) and background jobs (prio 0)
+        group_ll = list()
+        group_dt = list()
+        group_bg = list()
+        warp_ll = 0
+        warp_dt = 0
+        for j in self.pending_queue:
+            if j.priority >= 2:
+                group_ll.append(j)
+                warp_ll = max(warp_ll, self.warp_value(j))
+            elif j.priority == 1:
+                group_dt.append(j)
+                warp_dt = max(warp_dt, self.warp_value(j))
+            else:
+                group_bg.append(j)
+
+        # make scheduling decision
+        self.group_time_slice = float('inf')
+        if len(group_ll) and len(group_dt):
+            # select between low-latency group and desktop group based on their
+            # virtual times and warp values
+            evt_ll = self.group_vt['LowLatency'] - warp_ll
+            evt_dt = self.group_vt['Desktop']    - warp_dt
+            if evt_ll <= evt_dt:
+                dummy, job_index      = self.min_evt(in_jobs=group_ll)
+                self.group_time_slice = (evt_dt - evt_ll)*self.group_weight['LowLatency'] + self.C
+            else:
+                dummy, job_index      = self.min_evt(in_jobs=group_dt)
+                self.group_time_slice = (evt_ll - evt_dt)*self.group_weight['Desktop'] + self.C
+
+        elif len(group_ll):
+            # take job from low-latency group because desktop group is empty
+            dummy, job_index = self.min_evt(in_jobs=group_ll)
+        elif len(group_dt):
+            # take job from desktop group because low-latency group is empty
+            dummy, job_index = self.min_evt(in_jobs=group_dt)
+        else:
+            # take job from background group
+            dummy, job_index = self.min_evt(in_jobs=group_bg)
+
+        return self.pending_queue.pop(job_index)
+
+    def time_slice(self, j):
+        if j.priority >= 2:
+            job_priorities = {2,3}
+        else:
+            job_priorities = {j.priority}
+
+        in_jobs = [x for x in self.pending_queue if x is not j and x.priority in job_priorities]
+
+        # allow to run at most until for the group's time slice
+        return min(BVT.time_slice(self, j, in_jobs=in_jobs), self.group_time_slice)
 
 
 class BaseHw(Scheduler):
