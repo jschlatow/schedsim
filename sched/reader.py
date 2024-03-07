@@ -28,6 +28,7 @@ class WorkloadReader(object):
 
                 period = 0
                 start = row['start']
+                obj   = Job
                 if start.startswith("every"):
                     period_td = pd.Timedelta(start.split()[1])
                     period    = period_td.seconds * 1000 * 1000 + period_td.microseconds
@@ -35,8 +36,10 @@ class WorkloadReader(object):
                 elif start[0].isdigit():
                     start_td = pd.Timedelta(row['start'])
                     start    = start_td.seconds * 1000 * 1000 + start_td.microseconds
+                else:
+                    obj = WaitingJob
 
-                self.joblist.append(Job(row['thread'],
+                self.joblist.append(obj(row['thread'],
                                         start,
                                         runtime_us,
                                         period=period,
