@@ -751,9 +751,28 @@ class BVTSculpt(BVT):
         # low-latency jobs becomes irrelevant.
         # Moreover, as can eliminate the warp limit on these priorities if
         # we assume fixed job weights.
-        self.warp        = [0,   5000, 10000, 20000]
+        self.warp        = [0,   5000, 15000, 30000]
         self.warp_limit  = [0,  50000,     0,     0]
         self.unwarp_time = [0,      0,     0,     0]
+
+    def start_job(self, j, signalling_job=None):
+        # if job j enables the priority group, we may need to change the group_vt
+
+        ll_jobs = 0
+        dt_jobs = 0
+        for job in self.pending_queue:
+            if job.priority >= 2:
+                ll_jobs += 1
+            elif job.priority == 1:
+                dt_jobs += 1
+
+        if ll_jobs == 0 and j.priority >= 2:
+            self.group_vt['LowLatency'] = self.group_vt['Desktop']
+        elif dt_jobs == 0 and j.priority == 1:
+            self.group_vt['Desktop'] = self.group_vt['LowLatency']
+
+        BVT.start_job(self, j, signalling_job)
+
 
     def update_job(self, j, executed):
         Stride.update_job(self, j, executed)
