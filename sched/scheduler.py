@@ -637,12 +637,12 @@ class BVT(Stride):
 
         warp       = self.warp[j.priority]
         warp_limit = self.warp_limit[j.priority]
-        if signalling_job is not None:
+        if signalling_job is not None and hasattr(signalling_job, "warped"):
             warp = max(self.warp[signalling_job.priority], warp)
             if warp_limit == 0:
-                warp_limit = self.warp_limit[signalling_job.priority]
+                warp_limit = self.warp_limit[signalling_job.priority] - signalling_job.warp_time
             elif self.warp_limit[signalling_job.priority] > 0:
-                warp_limit = min(self.warp_limit[signalling_job.priority], warp_limit)
+                warp_limit = min(self.warp_limit[signalling_job.priority] - signalling_job.warp_time, warp_limit)
 
         if warp > 0:
             j.warped     = True
@@ -651,6 +651,8 @@ class BVT(Stride):
             j.warp_time  = 0
             if j.thread in self.unwarp_end and self.unwarp_end[j.thread] > self.time:
                 j.warped = False
+                j.warp   = 0
+                j.warp_limit = 0
 
     def finish_job(self, j):
         """Unwarp job j before finishing"""
