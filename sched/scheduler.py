@@ -754,7 +754,7 @@ class BVTSculpt(BVT):
         # Moreover, as can eliminate the warp limit on these priorities if
         # we assume fixed job weights.
         self.warp        = [0,   5000, 15000, 30000]
-        self.warp_limit  = [0,  50000,     0,     0]
+        self.warp_limit  = [0,  50000, 20000, 15000]
         self.unwarp_time = [0,      0,     0,     0]
 
     def start_job(self, j, signalling_job=None):
@@ -777,7 +777,7 @@ class BVTSculpt(BVT):
 
 
     def update_job(self, j, executed):
-        Stride.update_job(self, j, executed)
+        BVT.update_job(self, j, executed)
 
         # update group virtual time
         if j.priority >= 2:
