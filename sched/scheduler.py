@@ -901,19 +901,38 @@ class BaseHw(Scheduler):
 
         # find and return first highest priority job
         index = np.argmax(job_prios)
-        return self.pending_queue.pop(index)
+
+        # remark: in base-hw the job is kept in the queue
+        return self.pending_queue[index]
+
+    def insert_job(self, j):
+        # always insert at the beginning of the queue
+        self.pending_queue.insert(0, j)
+
+    def finish_job(self, j):
+        # base-hw keeps the job in the queue, hence we have to remove it
+        self.pending_queue.remove(j)
+        Scheduler.finish_job(self, j)
 
     def reinsert_job(self, j):
-        # Jobs that depleted their quota will be added to the head of the queue.
         if hasattr(j, 'one_time_boost') and j.one_time_boost:
+            # Jobs that depleted their quota will be moved to the head of the queue.
+            self.pending_queue.remove(j)
+
             j.one_time_boost = False
             self.pending_queue.insert(0,j)
-        else:
+        elif self.quota[j.thread] == 0:
+            # move job to the end
+            self.pending_queue.remove(j)
             self.pending_queue.append(j)
+        else:
+            # in base-hw, the job is kept in the queue
+            pass
 
     def time_slice(self, j):
         time_left_in_superperiod = self.last_superperiod + self.SUPERPERIOD - self.time
         if self.quota[j.thread] > 0:
-            return min(self.TIME_SLICE, self.time_until(self.next_preemption()), self.quota[j.thread], time_left_in_superperiod)
+            # Threads with quota may use up all their quota at once
+            return min(self.time_until(self.next_preemption()), self.quota[j.thread], time_left_in_superperiod)
         else:
             return min(self.TIME_SLICE, self.time_until(self.next_preemption()), time_left_in_superperiod)
