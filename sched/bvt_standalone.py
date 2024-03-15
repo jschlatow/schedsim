@@ -1,4 +1,5 @@
 import math
+import functools
 
 from sortedcontainers import SortedList
 
@@ -217,3 +218,165 @@ class BVT(Scheduler):
         return min((next_evt - current_evt)*j.weight + self.C,
                     self.time_until(self.main_scheduler.next_preemption()),
                     self.warp_time_left(j))
+
+
+@functools.total_ordering
+class VirtualJob(object):
+
+    def __init__(self, second_level_scheduler, name, weight):
+        self.second_level_scheduler = second_level_scheduler
+        self.executed_time = 0
+        self.thread        = name
+        self.weight        = weight
+        self.arrival       = 0
+
+    def __repr__(self):
+        return self.thread
+
+    def __le__(self, rhs):
+        if hasattr(self, "compare_func"):
+            return self.compare_func(rhs)
+
+        return NotImplemented
+
+    def __eq__(self, rhs):
+        return self.thread == rhs.thread
+
+
+class BVTTopLevel(BVT):
+    """BVT scheduler for top-level scheduler"""
+
+    def choose_job(self):
+        # we must sort the job tree because warp values might have changed
+        self.pending_queue.tree = SortedList(self.pending_queue.tree)
+
+        return BVT.choose_job(self)
+
+
+class BVTSculpt(Scheduler):
+    """Standalone hierarchical BVT scheduler"""
+
+    def __init__(self):
+        Scheduler.__init__(self)
+
+        self.priority_to_class = [0, 1, 2, 2]
+
+        self.second_level_schedulers = [BVT(scheduler=self), BVT(scheduler=self), BVT(scheduler=self)]
+        self.vjobs = [VirtualJob(self.second_level_schedulers[0], 'VBackground',  1),
+                      VirtualJob(self.second_level_schedulers[1], 'VDesktop',     6),
+                      VirtualJob(self.second_level_schedulers[2], 'VLowLatency', 20)]
+
+        self.first_level_scheduler = BVTTopLevel()
+
+        self.warp        = [0,   5000, 15000, 30000]
+        self.warp_limit  = [0,  50000, 20000, 20000]
+
+        self.pending_queue = self
+
+        # context-switch allowance (10ms)
+        self.C = 10000
+
+    def __len__(self):
+        """Required for compatibility with generic Scheduler"""
+        result = 0
+        for s in self.second_level_schedulers:
+            result += len(s.pending_queue)
+
+        return result
+
+    def __iter__(self):
+        """Required for compatibility with generic Scheduler"""
+        for s in self.second_level_schedulers:
+            for j in s.pending_queue:
+                yield j
+
+    def update_job(self, j, executed):
+        c = self.priority_to_class[j.priority]
+
+        # pass to second-level scheduler
+        s = self.second_level_schedulers[c]
+        s.update_job(j, executed)
+
+        # update virtual execution time of virtual job
+        self.first_level_scheduler.update_job(self.vjobs[c], executed)
+
+    def start_job(self, j, signalling_job=None):
+        c = self.priority_to_class[j.priority]
+        s = self.second_level_schedulers[c]
+
+        # handle warp boosting due to signalling
+        warp       = self.warp[j.priority]
+        warp_limit = self.warp_limit[j.priority]
+        if signalling_job is not None and hasattr(signalling_job, "warped"):
+            ss = self.second_level_schedulers[self.priority_to_class[signalling_job.priority]]
+            warp = max(self.warp[signalling_job.priority], warp)
+            if warp_limit == 0:
+                warp_limit = ss.warp_time_left(signalling_job)
+            else:
+                warp_limit = min(ss.warp_time_left(signalling_job), warp_limit)
+
+        # insert into second-level scheduler
+        s.start_job(j, warp=warp, warp_limit=warp_limit)
+
+        # insert virtual job into first-level scheduler
+        if len(s.pending_queue) == 1:
+            self.first_level_scheduler.start_job(self.vjobs[c], warp=warp, warp_limit=0)
+
+    def finish_job(self, j):
+        c = self.priority_to_class[j.priority]
+        s = self.second_level_schedulers[c]
+
+        s.finish_job(j)
+
+    def insert_job(self, j):
+        c = self.priority_to_class[j.priority]
+        s = self.second_level_schedulers[c]
+
+        s.insert_job(j)
+
+    def reinsert_job_before(self, j):
+        """Reinsert current second-level job before inserting new jobs"""
+        # insert into second-level scheduler
+        self.insert_job(j)
+
+    def reinsert_job(self, j):
+        pass
+
+    def choose_job(self):
+        # reinsert first-level job before choosing the next job
+        vj = self.first_level_scheduler.current_job
+        if vj is not None and len(vj.second_level_scheduler.pending_queue) > 0:
+            self.first_level_scheduler.insert_job(vj)
+            self.first_level_scheduler.current_job = None
+
+        # determine second-level warp values and propagate to virtual jobs
+        for vj in self.first_level_scheduler.pending_queue:
+            j    = vj.second_level_scheduler.pending_queue.min()
+            warp = vj.second_level_scheduler.warp_value(j)
+            if warp > 0:
+                vj.warped     = True
+                vj.warp       = warp
+                vj.warp_limit = 0
+            else:
+                vj.warped = False
+                vj.warp   = 0
+
+        # choose first-level and second-level jobs
+        self.first_level_scheduler.current_job = self.first_level_scheduler.choose_job()
+        s = self.first_level_scheduler.current_job.second_level_scheduler
+        s.current_job = s.choose_job()
+
+        return s.current_job
+
+    def time_slice(self, j):
+        # if j is the only job, run until preemption
+        if len(self) == 0:
+            return self.time_until(self.next_preemption())
+
+        # determine first-level time slice
+        first_level_slice = self.first_level_scheduler.time_slice(self.first_level_scheduler.current_job)
+
+        c = self.priority_to_class[j.priority]
+        s = self.second_level_schedulers[c]
+
+        return min(s.time_slice(j), first_level_slice)
