@@ -5,11 +5,12 @@ import argparse
 import numpy as np
 from sched import reader
 from sched import scheduler
+from sched import bvt_standalone
 from plot  import plot
 
 parser = argparse.ArgumentParser(description="Simulate CPU scheduler")
 parser.add_argument("filename", type=str)
-parser.add_argument("--policy", choices=["rr", "stride", "base-hw", "bvt", "bvt-nowarp", "bvt-sculpt"], default="rr")
+parser.add_argument("--policy", choices=["rr", "stride", "base-hw", "sa-bvt", "bvt", "bvt-nowarp", "bvt-sculpt"], default="rr")
 parser.add_argument("--plot_latencies", action="store_true")
 parser.add_argument("--plot_trace",     action="store_true")
 parser.add_argument("--plot_slices",    action="store_true")
@@ -27,6 +28,8 @@ elif args.policy == "base-hw":
     s = scheduler.BaseHw()
 elif args.policy == "bvt":
     s = scheduler.BVT(warp=True)
+elif args.policy == "sa-bvt":
+    s = bvt_standalone.BVT(warp=True)
 elif args.policy == "bvt-nowarp":
     s = scheduler.BVT(warp=False)
 elif args.policy == "bvt-sculpt":

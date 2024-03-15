@@ -1,8 +1,10 @@
 import numpy as np
 import pandas as pd
 import math
+import functools
 from itertools import islice
 
+@functools.total_ordering
 class Job(object):
     """
     A standard job.
@@ -51,6 +53,16 @@ class Job(object):
 
     def runtime_left(self):
         return max(self.execution_time - self.executed_time, 0)
+
+    def __le__(self, rhs):
+        """Dummy implementation (overridden by BVT standalone implementations)"""
+        if hasattr(self, "compare_func"):
+            return self.compare_func(rhs)
+
+        return NotImplemented
+
+    def __eq__(self, rhs):
+        return self.thread == rhs.thread
 
     def restart(self, completion_time):
         """
@@ -470,7 +482,7 @@ class Scheduler(object):
     def schedule(self):
         """Performs a scheduling decision"""
         current_job_finished = True
-        if self.current_job != None:
+        if self.current_job is not None:
             if not self.try_finish_job(self.current_job):
                 current_job_finished = False
 
@@ -478,6 +490,9 @@ class Scheduler(object):
 
         if current_job_finished:
             self.current_job = None
+
+        if self.current_job is not None and hasattr(self, "reinsert_job_before"):
+            self.reinsert_job_before(self.current_job)
 
         # check whether there is any restarted job ready
         self.take_ready_jobs()
