@@ -25,7 +25,12 @@ class JobTree(object):
 
     def insert(self, job):
         # remark: This is a hack to make jobs comparable.
-        job.compare_func = lambda rhs: self.lookup_evt(job) <= self.lookup_evt(rhs)
+        if hasattr(job, "started"):
+            # insert already started jobs after existing jobs
+            job.compare_func = lambda rhs: self.lookup_evt(job) < self.lookup_evt(rhs)
+        else:
+            # insert new jobs before existing jobs
+            job.compare_func = lambda rhs: self.lookup_evt(job) <= self.lookup_evt(rhs)
 
         if len(self.tree) == 0:
             self.cached_svt = self.lookup_avt(job)
