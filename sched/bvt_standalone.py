@@ -92,7 +92,7 @@ class JobTree(object):
 class BVT(Scheduler):
     """Standalone BVT scheduler"""
 
-    def __init__(self, warp=True, scheduler=None):
+    def __init__(self, warp=False, scheduler=None):
         Scheduler.__init__(self)
 
         self.main_scheduler = self
